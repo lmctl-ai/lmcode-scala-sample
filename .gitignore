@@ -1,0 +1,9 @@
+target/
+project/target/
+project/project/
+.bsp/
+.metals/
+.bloop/
+__pycache__/
+*.pyc
+.ci-bin/
