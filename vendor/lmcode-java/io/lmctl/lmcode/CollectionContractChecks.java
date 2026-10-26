@@ -59,7 +59,7 @@ public final class CollectionContractChecks {
 
   private static void v2ContainersAndJsonContracts() {
     Registry r = new Registry(true);
-    require(r.stdSignatures().size() == 171, "expected 171 std signatures, got " + r.stdSignatures().size());
+    require(r.stdSignatures().size() == 181, "expected 181 std signatures, got " + r.stdSignatures().size());
     Context c = new Context();
     Value borrowedJson;
     r.enterRun(c);
@@ -101,6 +101,29 @@ public final class CollectionContractChecks {
       require(StdCollections.arena(c).count == beforeJson + 2, "Json.keys allocates one StrList slot");
       require(call(r, "method StrList.at(int) -> string", c, keys, i(0)).asString().equals(s("a").asString()), "decoded key in keys()");
       require(call(r, "method Json.to_json() -> string", c, doc).asString().equals(s("{\"\\u0061\":[1,-0]}").asString()), "to_json preserves raw spellings");
+
+      Value raw = call(r, "fn str_hex_decode(string) -> string", c, s("00ff41"));
+      require(call(r, "fn str_hex_encode(string) -> string", c, raw).asString().equals(s("00ff41").asString()), "hex encode is lowercase");
+      Value b64 = call(r, "fn str_base64_encode(string) -> string", c, raw);
+      require(call(r, "fn str_base64_decode(string) -> string", c, b64).asString().equals(raw.asString()), "base64 roundtrip preserves raw bytes");
+      for (String invalidB64 : List.of("Zg", "Zg== ", "AB==", "Zh==")) {
+        boolean badB64 = false;
+        try {
+          call(r, "fn str_base64_decode(string) -> string", c, s(invalidB64));
+        } catch (VmException e) {
+          badB64 = "RUN_HOST".equals(e.code) && "str_base64_decode: invalid encoding".equals(e.getMessage());
+        }
+        require(badB64, "strict base64 rejects: " + invalidB64);
+      }
+      Value imap = call(r, "fn int_map() -> IntMap", c);
+      call(r, "method IntMap.set(string, int) -> IntMap", c, imap, s("x"), i(7));
+      call(r, "method IntMap.set(string, int) -> IntMap", c, imap, s("y"), i(8));
+      Value ik = call(r, "method IntMap.keys() -> StrList", c, imap);
+      Value iv = call(r, "method IntMap.values() -> IntList", c, imap);
+      call(r, "method IntMap.clear() -> IntMap", c, imap);
+      call(r, "method IntList.set(int, int) -> IntList", c, iv, i(0), i(99));
+      require(call(r, "method StrList.len() -> int", c, ik).asInt() == 2, "IntMap.keys snapshot is independent of map clear");
+      require(call(r, "method IntList.at(int) -> int", c, iv, i(0)).asInt() == 99, "IntMap.values snapshot is mutable IntList");
     } finally { r.exitRun(c); }
     boolean borrowedExpired = false;
     try {

@@ -132,6 +132,9 @@ final class StdContainers {
       ((LinkedHashMap<VmString, T>) StdCollections.unwrap(self)).clear();
       return self;
     });
+    String listType = type.equals("IntMap") ? "IntList" : "FloatList";
+    r.method(type, "keys", List.of(), "StrList", (c, self, a) -> StdCollections.obj(c, "StrList", new ArrayList<>(((LinkedHashMap<VmString, T>) StdCollections.unwrap(self)).keySet())));
+    r.method(type, "values", List.of(), listType, (c, self, a) -> StdCollections.obj(c, listType, new ArrayList<>(((LinkedHashMap<VmString, T>) StdCollections.unwrap(self)).values())));
   }
 
   @SuppressWarnings("unchecked")

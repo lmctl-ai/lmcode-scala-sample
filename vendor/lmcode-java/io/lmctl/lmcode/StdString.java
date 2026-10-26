@@ -23,6 +23,62 @@ final class StdString {
     r.function("str_is_float",java.util.List.of("string"),"bool",(c,x,a)->Value.ofBool(parseFloat(s(a[0]))!=null));
     r.function("str_to_float",java.util.List.of("string"),"float",(c,x,a)->Value.ofFloat(orZeroD(parseFloat(s(a[0])))));
     r.function("str_match",java.util.List.of("string","string"),"bool",(c,x,a)->Value.ofBool(glob(b(s(a[0])),b(s(a[1])))));
+    r.function("str_base64_encode",java.util.List.of("string"),"string",(c,x,a)->Value.ofString(base64Encode(c,s(a[0]))));
+    r.function("str_base64_decode",java.util.List.of("string"),"string",(c,x,a)->Value.ofString(base64Decode(c,s(a[0]))));
+    r.function("str_hex_encode",java.util.List.of("string"),"string",(c,x,a)->Value.ofString(hexEncode(c,s(a[0]))));
+    r.function("str_hex_decode",java.util.List.of("string"),"string",(c,x,a)->Value.ofString(hexDecode(c,s(a[0]))));
+  }
+  private static final byte[] B64="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".getBytes(StandardCharsets.US_ASCII);
+  private static final byte[] HEX="0123456789abcdef".getBytes(StandardCharsets.US_ASCII);
+  private static VmString base64Encode(Context c,VmString x){
+    byte[] in=b(x);long groups=(in.length/3L)+(in.length%3!=0?1L:0L);
+    if(groups>Integer.MAX_VALUE/4L)throw VmException.host("str_base64_encode: size overflow");
+    int outLen=(int)(groups*4L);c.charge(outLen);byte[] out=new byte[outLen];int o=0;
+    for(int i=0;i<in.length;i+=3){
+      int rem=in.length-i,b0=in[i]&0xff,b1=rem>1?(in[i+1]&0xff):0,b2=rem>2?(in[i+2]&0xff):0;
+      out[o++]=B64[(b0>>>2)&63];out[o++]=B64[((b0&3)<<4)|(b1>>>4)];
+      out[o++]=rem>1?B64[((b1&15)<<2)|(b2>>>6)]:(byte)'=';out[o++]=rem>2?B64[b2&63]:(byte)'=';
+    }
+    return new VmString(out);
+  }
+  private static int b64Val(int c){
+    if(c>='A'&&c<='Z')return c-'A';if(c>='a'&&c<='z')return c-'a'+26;if(c>='0'&&c<='9')return c-'0'+52;
+    return c=='+'?62:c=='/'?63:-1;
+  }
+  private static VmString base64Decode(Context c,VmString x){
+    byte[] in=b(x);if((in.length&3)!=0)throw VmException.host("str_base64_decode: invalid encoding");
+    int outCap=(in.length/4)*3;if(in.length>0){if(in[in.length-1]=='=')outCap--;if(in[in.length-2]=='=')outCap--;}
+    c.charge(Math.max(0,outCap));byte[] out=new byte[Math.max(0,outCap)];int o=0;
+    for(int i=0;i<in.length;i+=4){
+      boolean last=(i+4==in.length);int c0=in[i]&0xff,c1=in[i+1]&0xff,c2=in[i+2]&0xff,c3=in[i+3]&0xff;
+      int a=b64Val(c0),b=b64Val(c1);if(a<0||b<0)throw VmException.host("str_base64_decode: invalid encoding");
+      if(c2=='='){if(!last||c3!='='||(b&15)!=0)throw VmException.host("str_base64_decode: invalid encoding");out[o++]=(byte)((a<<2)|(b>>>4));continue;}
+      int d=b64Val(c2);if(d<0)throw VmException.host("str_base64_decode: invalid encoding");
+      out[o++]=(byte)((a<<2)|(b>>>4));out[o++]=(byte)((b<<4)|(d>>>2));
+      if(c3=='='){if(!last||(d&3)!=0)throw VmException.host("str_base64_decode: invalid encoding");continue;}
+      int e=b64Val(c3);if(e<0)throw VmException.host("str_base64_decode: invalid encoding");
+      out[o++]=(byte)((d<<6)|e);
+    }
+    return o==out.length?new VmString(out):new VmString(Arrays.copyOf(out,o));
+  }
+  private static VmString hexEncode(Context c,VmString x){
+    byte[] in=b(x);if(in.length>Integer.MAX_VALUE/2)throw VmException.host("str_hex_encode: size overflow");
+    int outLen=in.length*2;c.charge(outLen);byte[] out=new byte[outLen];
+    for(int i=0;i<in.length;i++){int v=in[i]&0xff;out[i*2]=HEX[v>>>4];out[i*2+1]=HEX[v&15];}
+    return new VmString(out);
+  }
+  private static int hexVal(int c){
+    if(c>='0'&&c<='9')return c-'0';if(c>='a'&&c<='f')return c-'a'+10;if(c>='A'&&c<='F')return c-'A'+10;return -1;
+  }
+  private static VmString hexDecode(Context c,VmString x){
+    byte[] in=b(x);if((in.length&1)!=0)throw VmException.host("str_hex_decode: invalid encoding");
+    int outLen=in.length/2;c.charge(outLen);byte[] out=new byte[outLen];
+    for(int i=0;i<in.length;i+=2){
+      int hi=hexVal(in[i]&0xff),lo=hexVal(in[i+1]&0xff);
+      if(hi<0||lo<0)throw VmException.host("str_hex_decode: invalid encoding");
+      out[i>>>1]=(byte)((hi<<4)|lo);
+    }
+    return new VmString(out);
   }
   private static byte[] b(VmString x){return x.bytes();}
   private static boolean bytes(VmString a,VmString b){return starts(b(a),b(b));}

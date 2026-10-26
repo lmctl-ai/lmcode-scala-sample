@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Build the Scala host from the vendored sources, then run every check the C++ reference runs:
-# pinned locks, the coverage audit, the shared corpus (all 50 cases, byte-exact), compiler reproducibility
-# and the runner's negative controls. Requires sbt and python3; the corpus check also needs lmscript.
+# Build the Scala host from the vendored sources, then run the canonical corpus checks: pinned locks, the
+# coverage audit, every corpus case byte-for-byte, compiler reproduction and the runner's controls.
 set -euo pipefail
 cd "$(dirname "$0")"
 SBT="${SBT:-sbt}"

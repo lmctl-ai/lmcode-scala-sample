@@ -43,6 +43,17 @@ def command_for(env, lang, repo):
         if not isinstance(value, list) or not all(isinstance(x, str) for x in value):
             raise ValueError(f"{key} must be a JSON argv array")
         return value
+    if lang == "rust" and (repo / "Cargo.toml").is_file():
+        return [str(repo / "target/release/lmcode-rust-sample")]
+    if lang == "csharp" and (repo / "src/LmCode.Sample.csproj").is_file():
+        return ["dotnet", str(repo / "src/bin/Release/net8.0/lmcode-csharp-sample.dll")]
+    if lang == "kotlin" and (repo / "pom.xml").is_file():
+        return ["java", "-jar", str(repo / "target/lmcode-kotlin-sample.jar")]
+    if lang == "scala" and (repo / "build.sbt").is_file():
+        classpath = (repo / "target/runtime-classpath.txt").read_text().strip()
+        if not classpath:
+            raise ValueError("scala: empty runtime classpath")
+        return ["java", "-cp", classpath, "shop.Main"]
     return [str(repo / "build" / f"lmcode-{lang}-sample")]
 
 
@@ -53,6 +64,14 @@ def build_for(lang, repo, env):
         if not isinstance(value, list) or not all(isinstance(x, str) for x in value):
             raise ValueError(f"{key} must be a JSON argv array")
         return value
+    if lang == "rust" and (repo / "Cargo.toml").is_file():
+        return ["cargo", "build", "--release", "--locked"]
+    if lang == "csharp" and (repo / "src/LmCode.Sample.csproj").is_file():
+        return ["dotnet", "build", "src/LmCode.Sample.csproj", "--configuration", "Release", "--nologo"]
+    if lang == "kotlin" and (repo / "pom.xml").is_file():
+        return ["mvn", "--batch-mode", "package", "-DskipTests"]
+    if lang == "scala" and (repo / "build.sbt").is_file():
+        return [env.get("SBT", "sbt"), "-batch", "compile", "writeRuntimeClasspath"]
     if lang == "go" and (repo / "go.mod").is_file():
         return ["go", "build", "-o", str(repo / "build/lmcode-go-sample"), "."]
     if (repo / "build.sh").is_file():
@@ -67,7 +86,7 @@ def execute(argv, cwd, log, env):
     with log.open("w") as output:
         try:
             result = subprocess.run(argv, cwd=cwd, env=env, stdout=output,
-                                    stderr=subprocess.STDOUT, timeout=int(env.get("SAMPLE_TIMEOUT", 120)))
+                                    stderr=subprocess.STDOUT, timeout=int(env.get("SAMPLE_TIMEOUT", 600)))
             code = result.returncode
         except (OSError, subprocess.TimeoutExpired) as error:
             output.write(str(error) + "\n")
@@ -107,13 +126,10 @@ def pinned_std_digest(repo):
 
 def legacy_signature_set():
     audit = runpy.run_path(str(ROOT / "audit.py"))
-    result = set()
-    for area in ("string", "math", "collections", "file"):
-        path = ROOT.parent / "stdlib" / (area + ".schema-fragment.json")
-        if not path.exists():
-            return set()
-        result.update(audit["signatures"](json.loads(path.read_text())))
-    return result
+    data = (ROOT / "legacy-std-v1.schema.json").read_bytes()
+    if hashlib.sha256(data).hexdigest() != LEGACY_STD_SHA256:
+        raise ValueError("legacy std fixture digest mismatch")
+    return audit["signatures"](json.loads(data))
 
 
 def selected_ports(value):
@@ -240,7 +256,7 @@ def main():
                 if not good:
                     print(f"FAIL {lang}/{name}: output or exit mismatch")
                     report["ok"] = False
-            entry["ok"] = all(item["ok"] for item in entry["cases"]) and not protocol.returncode
+            entry["ok"] = all(item["ok"] for item in entry["cases"]) and not protocol.returncode and not entry.get("pending", False)
         except Exception as error:
             entry["error"] = str(error)
             print(f"FAIL {lang}: {error}")

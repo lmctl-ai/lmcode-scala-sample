@@ -3,7 +3,8 @@
 **Agent entry point:** a complete Scala 3 host for the shared lmcode shop corpus, not another interpreter.
 Read these three files first: [domain and bindings](src/main/scala/shop/Shop.scala),
 [CLI protocol](src/main/scala/shop/Main.scala), and [byte-exact output](src/main/scala/shop/Protocol.scala).
-The SDK is the Java 21 `io.lmctl.lmcode` package, vendored unchanged in `vendor/lmcode-java/`.
+The SDK is the Java 21 `io.lmctl.lmcode` package (catalog v3, 181 signatures), vendored unchanged in
+`vendor/lmcode-java/`. `./test.sh` passes all 90 corpus cases byte-for-byte.
 You need a JDK 21, [sbt](https://www.scala-sbt.org/), Python 3 and `lmscript >= 0.2.420`.
 
 ```sh
@@ -70,10 +71,11 @@ npm install --global @lmctl-ai/lmctl@0.2.420
 | Stack underflow and non-finite priority traps | 106–107 |
 | Literal forms: words, numbers, maps, Json, bindings (needs `lmcode-literals-v1`, see below) | 201–205 |
 | Loader rejection: bad bytecode, schema mismatch, wrong handle import | 090–092 |
+| Std v3 byte codecs (base64, hex), number and string map snapshots, codec boundaries and invalid-input traps | 301–305, 311–313 |
 
 The full feature-to-program matrix, with links to every source, bytecode and expectation, is in
 [sample-suite/README.md](sample-suite/README.md). The Scala port needs nothing special for 101–108: the
-SDK's default `Registry` registers the v2 containers and Json, and the port only binds the domain and probes.
+SDK's default `Registry` registers the v3 catalog (containers, Json, ...), and the port only binds the domain and probes.
 
 ## Conversions: lmcode type -> Scala
 
@@ -116,11 +118,11 @@ The CI matrix runs `./test.sh` on Linux x64/arm64, macOS arm64/x64 and Windows x
 
 ## Notes for the next port
 
-- The schema declares 45 host signatures (the shop domain plus the native conversion probes) and the full v2
-  standard catalog. The port registers exactly the declared host surface; `--dsl-signatures` must equal the
+- The schema declares 45 host signatures (the shop domain plus the native conversion probes) and the full v3
+  standard catalog (181 signatures). The port registers exactly the declared host surface; `--dsl-signatures` must equal the
   schema-derived list, and the protocol check enforces it.
 - Programs 201–205 need `lmcode-literals-v1`, a compiler feature from lmctl-mono `0ce49614`, which lmscript 0.2.420
-  lacks. Their pinned bytecode still runs in the 82-case check. `scripts/check-bytecode.py` recompiles the 77 other
-  cases and reports the exclusion instead of hiding it; use `LMSCRIPT_BIN` with a literal-capable build for the full check.
+  lacks. Their pinned bytecode still runs in the 90-case check. `scripts/check-bytecode.py` (the canonical
+  `sample-suite/check-recompile.py`) recompiles the 85 other cases and reports the exclusion instead of hiding it; use `LMSCRIPT_BIN` with a literal-capable build for the full check.
 - Messages from `Ledger.reject` decode the byte string as UTF-8 (`VmException` takes a `String`). Corpus messages are
   ASCII; a port that must keep arbitrary bytes in error messages needs a byte-carrying error type.
