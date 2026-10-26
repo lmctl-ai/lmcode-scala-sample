@@ -53,16 +53,11 @@ final class Host:
   def context: Context =
     Context().set("shop", handle("Shop", shop)).set("ledger", handle("Ledger", ledger))
 
-  // --- Binding helpers --------------------------------------------------------------------------
+  // --- Binding helpers (shared through Bind) ----------------------------------------------------
 
-  private def params(names: String*): java.util.List[String] = java.util.List.of(names*)
-
-  /** A host object as a tagged value. `object` is a Scala keyword, so the SDK's method needs backticks here. */
-  private def handle(typeName: String, obj: AnyRef): Value = Value.`object`(typeName, obj)
-
-  /** Turn a method receiver or argument back into the host object it was created from. */
-  private def as[T](value: Value): T = value.asObject.asInstanceOf[T]
-
+  private def params(names: String*): java.util.List[String] = Bind.params(names*)
+  private def as[T](value: Value): T = Bind.as[T](value)
+  private def handle(typeName: String, obj: AnyRef): Value = Bind.handle(typeName, obj)
   private def money(cents: Long): Value = handle("Money", own(cents))
 
   /** A float price is in units; convert to cents with range checks, never a raw cast of an out-of-range double. */
@@ -73,6 +68,9 @@ final class Host:
     money(cents.toLong)
 
   // --- Registrations ------------------------------------------------------------------------------
+
+  // The native conversion probes (CONTRACT.md) are registered by Conversions.
+  Conversions.register(registry, shop.items)
 
   // Context names must match the schema. Standard testing (print, assert_close) is an explicit opt-in.
   registry.context("shop", "Shop").context("ledger", "Ledger")
@@ -89,17 +87,17 @@ final class Host:
   })
 
   // Money: arithmetic wraps modulo 2^64, which is what Java long arithmetic already does.
-  registry.method("Money", "amount", params(), "int", (_, self, _) => Value.ofInt(as[Money](self).cents))
+  registry.method("Money", "amount", params(), "int", (_, self, _) => Value.ofInt(Bind.moneyOf(self).cents))
   registry.method("Money", "currency", params(), "Currency", (_, _, _) => Value.ofString("USD"))
   registry.method("Money", "plus", params("Money"), "Money", (_, self, a) =>
-    money(as[Money](self).cents + as[Money](a(0)).cents))
+    money(Bind.moneyOf(self).cents + Bind.moneyOf(a(0)).cents))
   registry.method("Money", "minus", params("Money"), "Money", (_, self, a) =>
-    money(as[Money](self).cents - as[Money](a(0)).cents))
+    money(Bind.moneyOf(self).cents - Bind.moneyOf(a(0)).cents))
   registry.method("Money", "times", params("int"), "Money", (_, self, a) =>
-    money(as[Money](self).cents * a(0).asInt))
-  registry.method("Money", "neg", params(), "Money", (_, self, _) => money(0L - as[Money](self).cents))
+    money(Bind.moneyOf(self).cents * a(0).asInt))
+  registry.method("Money", "neg", params(), "Money", (_, self, _) => money(0L - Bind.moneyOf(self).cents))
   registry.method("Money", "set", params("int"), "Money", (_, self, a) => {
-    as[Money](self).cents = a(0).asInt
+    Bind.moneyOf(self).cents = a(0).asInt
     self // The schema says returns:self, so the same receiver comes back.
   })
 
@@ -124,7 +122,7 @@ final class Host:
   // A method can return its receiver (record), return a fresh object (balance) or return nothing (note).
   registry.method("Ledger", "record", params("Money"), "Ledger", (_, self, a) => {
     val ledger = as[Ledger](self)
-    ledger.balance += as[Money](a(0)).cents
+    ledger.balance += Bind.moneyOf(a(0)).cents
     ledger.entries += 1L
     self
   })
