@@ -3,6 +3,10 @@
 ThisBuild / scalaVersion := "3.3.6"
 ThisBuild / version := "0.1.0"
 
+// test.sh runs the corpus with `java -cp <file contents> shop.Main`. A task writes the classpath to a
+// file, so no parsing of sbt's console output is needed.
+val writeRuntimeClasspath = taskKey[File]("Write the runtime classpath for the corpus runner")
+
 lazy val sample = (project in file("."))
   .settings(
     name := "lmcode-scala-sample",
@@ -17,5 +21,10 @@ lazy val sample = (project in file("."))
       val target = (Compile / resourceManaged).value / "sample.dsl.json"
       IO.copyFile(source, target)
       Seq(target)
-    }.taskValue
+    }.taskValue,
+    writeRuntimeClasspath := {
+      val file = target.value / "runtime-classpath.txt"
+      IO.write(file, (Runtime / fullClasspath).value.map(_.data.getAbsolutePath).mkString(java.io.File.pathSeparator))
+      file
+    }
   )
