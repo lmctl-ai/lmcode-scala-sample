@@ -14,9 +14,15 @@ ROOT = Path(__file__).resolve().parent
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=ROOT / 'bytecode')
+    parser.add_argument('--exclude-feature', action='append', default=[], help='explicit partial reproducibility check; requires --output')
     args = parser.parse_args()
+    if args.exclude_feature and args.output.resolve() == (ROOT / 'bytecode').resolve():
+        parser.error('partial compilation requires a separate --output; pinned manifest cannot be reduced')
     args.output.mkdir(parents=True, exist_ok=True)
     coverage = json.loads((ROOT / 'coverage.json').read_text())
+    known_features = {feature for features in coverage.get('compiler_features', {}).values() for feature in features}
+    if set(args.exclude_feature) - known_features:
+        parser.error('unknown compiler feature')
     compiler_name = os.environ.get('LMSCRIPT_BIN', 'lmscript')
     compiler = shutil.which(compiler_name)
     if not compiler:
@@ -25,6 +31,10 @@ def main():
     for source in sorted((ROOT / 'programs').glob('*.lms')):
         if len(source.read_text().splitlines()) > 40:
             sys.exit(f'{source.name}: exceeds 40 lines')
+        required = coverage.get('compiler_features', {}).get(source.name, [])
+        if set(required) & set(args.exclude_feature):
+            print('SKIP compiler reproduction: ' + source.name + ' requires ' + ','.join(required))
+            continue
         output = args.output / (source.stem + '.dslb')
         subprocess.run([compiler, '--no-preflight', str(source), str(output.resolve())], check=True)
         cases.append(dict(name=source.stem, source='programs/' + source.name,
@@ -33,7 +43,10 @@ def main():
                           bytecode_sha256=hashlib.sha256(output.read_bytes()).hexdigest(),
                           expected_exit=coverage.get('exit_codes', {}).get(source.name,
                                          3 if source.name in coverage['expected_failures'] else 0),
+                          timeout_seconds=coverage.get('timeouts', {}).get(source.name, 30),
                           features=coverage['programs'][source.name]))
+        if source.name in coverage.get('compiler_features', {}):
+            cases[-1]['compiler_features'] = coverage['compiler_features'][source.name]
     original = (args.output / (cases[0]['name'] + '.dslb')).read_bytes()
     for name, offset in [('090-bad-bytecode', 0), ('091-schema-mismatch', 6)]:
         data = bytearray(original)
@@ -45,11 +58,24 @@ def main():
                           expected_exit=3,
                           mutation=dict(source=cases[0]['name'], byte_offset=offset),
                           features=['loader ' + name[4:]]))
+    source_name = '055-object-handles'
+    raw = (args.output / (source_name + '.dslb')).read_bytes()
+    before = b'fn host_echo_money(Money) -> Money'
+    after = b'fn host_echo_money(Items) -> Money'
+    assert before in raw and len(before) == len(after)
+    changed = raw.replace(before, after)
+    name = '092-wrong-handle-import'
+    (args.output / (name + '.dslb')).write_bytes(changed)
+    cases.append(dict(name=name, bytecode='bytecode/' + name + '.dslb',
+                      bytecode_sha256=hashlib.sha256(changed).hexdigest(), expected_exit=3,
+                      mutation=dict(source=source_name, import_from=before.decode(), import_to=after.decode()),
+                      features=['declared wrong handle type load error']))
     # Alternate output is for reproducibility checks and never changes the manifest.
     if args.output.resolve() == (ROOT / 'bytecode').resolve():
         manifest = dict(format=1, schema='sample.dsl.json', bytecode_version=5,
                         schema_sha256=hashlib.sha256((ROOT / 'sample.dsl.json').read_bytes()).hexdigest(),
                         compiler_minimum='0.2.420', cases=cases)
+        manifest['fixtures'] = {'invalid.bin': 'ff00c328800a', 'zero-bytes.bin': '610062', 'chunk.bin': '7800c3a9'}
         (ROOT / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', newline='\n')
     print(f'Compiled {len(cases)} sample cases')
 

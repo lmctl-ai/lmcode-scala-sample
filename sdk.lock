@@ -1,9 +1,9 @@
 {
   "repo": "lmctl-ai/lmcode-java",
-  "commit": "13c302fe27aaf3d30fe00c1d06a2dd9c3d5b367d",
+  "commit": "dff5b0982da9146b146d2d7698c8b3dc65fc86d0",
   "sha256": {
     "LICENSE": "e25615ca259eca3930ca632e9c5b959692b164b31c4e66ba453b8aa8e81705d7",
-    "io/lmctl/lmcode/CollectionContractChecks.java": "4244e32cf229a347f0f5b32ded3e7c98bc9519aae2d78a583ed063d3ea806f7b",
+    "io/lmctl/lmcode/CollectionContractChecks.java": "02434e6397f343d2208a7d36d2bc6c147d0ef3735142719492add5b8a90ef454",
     "io/lmctl/lmcode/ConformanceRunner.java": "7d6847ad9717e9921433d275244bd4579b751d0c98bf2ca41f7e93fab76f7261",
     "io/lmctl/lmcode/Context.java": "81721af238bb9e0dd00a7ce98d9ff2ed4b77f167ef19e85c9c08370aa3f3a836",
     "io/lmctl/lmcode/Execution.java": "03acec1ff345947a1105adb8c2e245082034619e218761a8a4cea29fef9c8c71",
@@ -16,20 +16,22 @@
     "io/lmctl/lmcode/Program.java": "ac10573e150fd4d9f8e2ed8f658266f5b907be90aff23e48069cbccb77479d87",
     "io/lmctl/lmcode/Reader.java": "3f43a8ae8b074aa3fed5eeb718dc873b00f37cf564e5be7f3b0d0545b1dca7fa",
     "io/lmctl/lmcode/Registry.java": "f6e7571fc8ff90ab1b28ed3f5280a5cbb3b00b2c15b2d1636594e8b14dbae445",
-    "io/lmctl/lmcode/Reports.java": "6d11ee559501b651d920a44ec919a0afe17f06cac06f92b4aa24765892b4e142",
+    "io/lmctl/lmcode/Reports.java": "db1d2c23e6af9c5a2bb4031b44f7bd2892b6b293ccc767a06471bd7e95340c15",
     "io/lmctl/lmcode/SchemaSignatures.java": "9f09f6c5f9ce9bf959bc33f7d6233cf4c8fc8b420979a7886ced2e8aa0afb63b",
     "io/lmctl/lmcode/SelfTest.java": "af0460cba7b721f4c51290ef3b6313ecdd5a6d891b56c65c81bb4bba52ffb2e8",
-    "io/lmctl/lmcode/StdCollections.java": "ba5f87af43b98193261c4ae6658da1ee65c18ae5e7d5308af3a67fd64e329643",
+    "io/lmctl/lmcode/StdCollections.java": "bf248234e439c72055ef5025162d4383ff1c4c1b2ad4858b015936234eb5c897",
+    "io/lmctl/lmcode/StdContainers.java": "6583ca1782ac00eaac9c1b260dbb13c065af35f103e00a793c60e209da525d4c",
     "io/lmctl/lmcode/StdFile.java": "90c68787e1d60cc792c9d265fe44a665aa685a9de4b5a4e33800ca8f882aea4d",
+    "io/lmctl/lmcode/StdJson.java": "ffe470e84462196270c83b68ee1bc854892d56b0ea18e1d214e4db62d7882642",
     "io/lmctl/lmcode/StdMath.java": "631106752de4675618dca5d2b34a6129d0d6cf6fcca1e21b7f279aded25a2477",
     "io/lmctl/lmcode/StdString.java": "8122fe4bfc44fad382832fa102f96c73f1d5950f9938ec7aa8eeb49995923525",
     "io/lmctl/lmcode/StdTesting.java": "4c1d8c500fc34942c77f5bade31d8d066ffe1958579988186359761f4743a657",
-    "io/lmctl/lmcode/Stdlib.java": "d6636bd883a352e8886e54d6fe4040c35ed2ff8fad75b26509e950c1651582fe",
-    "io/lmctl/lmcode/Value.java": "f75657a94f2995f8e9a748bbece1b1d13ef81fa8611cc0132de4b560bd03dd0f",
+    "io/lmctl/lmcode/Stdlib.java": "a1ccd0903e34f663e992474207e2254d459edbf9367bb78dd230d0eb545567bf",
+    "io/lmctl/lmcode/Value.java": "f1c6a7b4c3b28bb54154cb5b95134252e3870bd3baba011d5b88a0c64d595618",
     "io/lmctl/lmcode/Verifier.java": "4d9cdb6f53f78d796a83c92dda14f42d057c51ac60b6e4c5759e4a0ddf4ffbda",
     "io/lmctl/lmcode/VmException.java": "7fee8d05bf61bf090e91ec527d7ca6abd607c8923403533be3debb790219456a",
     "io/lmctl/lmcode/VmString.java": "a5d4053a96494eaec3dffe75ebede4d6b71b27c4e4e37f534959f8329cc365a5",
     "io/lmctl/lmcode/examples/Greeter.java": "f2e4eee5b4ce4cded2679d8bec0761399145de8daad3a65eac6cca6fe6cd12db",
-    "std/lmcode-std.schema.json": "cfe31e8b34fdcc33a13e456e80fa9d05a5e6c8fed5b98988abd24ac8570e65e0"
+    "std/lmcode-std.schema.json": "296d7f66ff462fef3c3fa1f83c3e8889874d8714ceb303237ffac940a16aaaf8"
   }
 }
