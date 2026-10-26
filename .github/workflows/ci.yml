@@ -1,0 +1,54 @@
+name: Scala sample integration
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      compiler:
+        description: Published lmctl/lmscript version to check
+        default: '0.2.420'
+        type: string
+permissions:
+  contents: read
+jobs:
+  test:
+    env:
+      LMSCRIPT_VERSION: ${{ inputs.compiler || '0.2.420' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-24.04, label: linux-x64}
+          - {os: ubuntu-24.04-arm, label: linux-arm64}
+          - {os: macos-15, label: macos-arm64}
+          - {os: macos-15-intel, label: macos-x64}
+          - {os: windows-2022, label: windows-x64}
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.label }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: sbt/setup-sbt@ecad189dd245444b9ae0a0cd5922fd938b88906f
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Compiler and Windows python shim
+        run: |
+          npm install --global "@lmctl-ai/lmctl@$LMSCRIPT_VERSION"
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            mkdir -p .ci-bin
+            printf '#!/usr/bin/env bash\nexec python "$@"\n' > .ci-bin/python3
+            chmod +x .ci-bin/python3
+            echo "$PWD/.ci-bin" >> "$GITHUB_PATH"
+          fi
+      - name: Build, protocol, all programs, compiler reproducibility and harness controls
+        run: ./test.sh
