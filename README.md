@@ -52,17 +52,28 @@ npm install --global @lmctl-ai/lmctl@0.2.420
 | While, range, inline function, switches | 005–008, 036, 039, 043, 045 |
 | Host overloads, objects, operators, conversion, chaining, void methods | 009–014, 034–035, 040 |
 | Pure host function `fee(int)` | 002 |
-| Every standard collection method | 015–018, 037–038 |
+| Every standard collection method (list, map, iteration) | 015–018, 037–038 |
 | Every standard math overload and all 18 intrinsic math operations | 019–020, 025, 048 |
 | Every standard string function and conversion | 021–023 |
 | Every standard file function | 024 |
 | Located VM and host errors, testing failure, application rule | 026–033 |
 | int64 wrap and overflow, short-circuit, host foreach | 041–044 |
 | Raw and dedented inner heredocs, all four outer splice types | 046–047 |
-| Bad magic and schema-binding rejection | 090–091 |
+| Int, float, bool and byte boundaries; invalid UTF-8 through the file API | 049–053 |
+| Megabyte strings, object handles, collection boundaries | 054–056 |
+| Nested inline error, 1,000,000-iteration loop, deep inlining, 255 arguments, 128-byte names | 057–061 |
+| Null receiver, wrong runtime handle, invalid float prices, null Money through a method | 062–066 |
+| Native conversion probes: scalars, bytes, hex, handle identity, typed null, wrong-typed handle, copies, `host_sum` | 049–066 (probes) |
+| Typed int and float maps (`int_map`, `float_map`) | 101 |
+| Int, float and string containers: stacks, queues, priority queues | 102–104 |
+| Json parse, navigation, object key order, kind errors | 105, 108 |
+| Stack underflow and non-finite priority traps | 106–107 |
+| Literal forms: words, numbers, maps, Json, bindings (needs `lmcode-literals-v1`, see below) | 201–205 |
+| Loader rejection: bad bytecode, schema mismatch, wrong handle import | 090–092 |
 
 The full feature-to-program matrix, with links to every source, bytecode and expectation, is in
-[sample-suite/README.md](sample-suite/README.md).
+[sample-suite/README.md](sample-suite/README.md). The Scala port needs nothing special for 101–108: the
+SDK's default `Registry` registers the v2 containers and Json, and the port only binds the domain and probes.
 
 ## Conversions: lmcode type -> Scala
 
@@ -76,7 +87,10 @@ The full feature-to-program matrix, with links to every source, bytecode and exp
 | `Currency` (enum) | `string` value `"USD"` | Enums are string-backed at the boundary. |
 | `void` | `Value.none()` | Return it from void methods. |
 | `self` return | the same receiver `Value` | Return `self` to chain (`Money.set`, `Ledger.record`). |
-| `StrList`, `IntList`, `StrMap`, ... | owned by the standard registry | Not used by this sample; the SDK creates and clears them per run. |
+| `StrList`, `IntList`, `FloatList`, `StrMap` | a registry-owned standard handle; copy with `Stdlib.makeStrList` / `makeIntList` / `makeFloatList` / `makeStrMap` and read with `Stdlib.collectionValues` / `mapEntries` | Handles expire when `run()` ends. Probes copy the input and append (`host`, `9`, `0.5`, `host=yes`); the input is unchanged. |
+| `IntStack`, `IntQueue`, `IntPQ`, `FloatStack`, ... | registry-owned standard handle; created by the bytecode, not by this host | Host code never builds them. `pop` on an empty stack is `RUN_HOST` (`IntStack.pop: empty`). A non-finite priority is `RUN_HOST` (`IntPQ.push: priority must be finite`). |
+| `IntMap`, `FloatMap`, `StrMap` (typed maps) | standard handle; keys are bytes (`VmString`), values are `int64`, `binary64` or bytes | Insertion-ordered. `set` replaces a value; removing then re-setting a key moves it to the end (program 101). `get_or` supplies a default. `StrMap.get` on a missing key is `RUN_HOST` (`StrMap.get: missing key`). |
+| `Json` values | standard handle; parsed by `json_parse` in the bytecode | Object keys keep insertion order and are decoded for `keys()`; `to_json()` keeps the parsed key spelling (`\u0061` stays escaped). A JSON integer reads as `int` and as `float` (`42`). `get` on a non-object is `RUN_HOST` (`Json.get: expected object`). |
 | Errors | `VmException(code, message)` | `VmException.host` is `RUN_HOST`; the VM adds `line`/`column`; `LOAD_*` come from loading. |
 
 Output is written as raw bytes with LF endings (`Protocol.emit`), never through `println`, so a
@@ -102,8 +116,11 @@ The CI matrix runs `./test.sh` on Linux x64/arm64, macOS arm64/x64 and Windows x
 
 ## Notes for the next port
 
-- The canonical `sample.dsl.json` declares 39 functions. The C++ reference also registers 17 extra
-  `host_*` conversion functions that the schema does not declare, so its own protocol check fails.
-  This port registers exactly the declared surface.
-- Messages from `Ledger.reject` decode the byte string as UTF-8 (`VmException` takes a `String`). Corpus
-  messages are ASCII; a port that must keep arbitrary bytes in error messages needs a byte-carrying error type.
+- The schema declares 45 host signatures (the shop domain plus the native conversion probes) and the full v2
+  standard catalog. The port registers exactly the declared host surface; `--dsl-signatures` must equal the
+  schema-derived list, and the protocol check enforces it.
+- Programs 201–205 need `lmcode-literals-v1`, a compiler feature from lmctl-mono `0ce49614`, which lmscript 0.2.420
+  lacks. Their pinned bytecode still runs in the 82-case check. `scripts/check-bytecode.py` recompiles the 77 other
+  cases and reports the exclusion instead of hiding it; use `LMSCRIPT_BIN` with a literal-capable build for the full check.
+- Messages from `Ledger.reject` decode the byte string as UTF-8 (`VmException` takes a `String`). Corpus messages are
+  ASCII; a port that must keep arbitrary bytes in error messages needs a byte-carrying error type.
