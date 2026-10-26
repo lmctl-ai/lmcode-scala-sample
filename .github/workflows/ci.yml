@@ -1,8 +1,5 @@
 name: Scala sample integration
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
     inputs:
       compiler:
