@@ -6,7 +6,9 @@ import java.util.*;
 public final class Execution {
   private Execution() {}
 
-  public static void run(Program p, Context ctx, Registry registry) {
+  public static void run(Program p, Context ctx, Registry registry) { execute(p,ctx,registry,List.of(),false); }
+
+  static Value execute(Program p, Context ctx, Registry registry,List<Value> arguments,boolean captureResult) {
     Registry owner = p.boundRegistry != null ? p.boundRegistry : registry;
     owner.enterRun(ctx);
     ctx.resetBudget();
@@ -14,6 +16,7 @@ public final class Execution {
       ArrayList<Value> stack = new ArrayList<>(Math.min(p.maxStack,256));
       ctx.charge((long)p.locals.size()*16+Math.min(p.maxStack,256)*8L);
       Value[] locals = new Value[p.locals.size()];
+      for(int i=0;i<arguments.size();i++)locals[i]=arguments.get(i);
       Reader r = new Reader(p.code);
       long instructions = 0;
       while (!r.done()) {
@@ -42,7 +45,7 @@ public final class Execution {
             case JUMP_IF_TRUE -> { int d=r.i32(); if(condition(stack)) jump(r,d,p.code.length); }
             case DUP -> { if(stack.isEmpty()) throw error("stack underflow"); stack.add(stack.get(stack.size()-1)); }
             case POP -> pop(stack);
-            case HALT -> { return; }
+            case HALT -> { return captureResult?pop(stack):Value.none(); }
             case ADD_I -> binI(stack,(a,b)->a+b); case SUB_I -> binI(stack,(a,b)->a-b); case MUL_I -> binI(stack,(a,b)->a*b);
             case DIV_I -> binI(stack,Execution::div); case MOD_I -> binI(stack,Execution::mod);
             case ADD_F -> binF(stack,(a,b)->a+b); case SUB_F -> binF(stack,(a,b)->a-b); case MUL_F -> binF(stack,(a,b)->a*b); case DIV_F -> binF(stack,(a,b)->a/b);
@@ -64,6 +67,7 @@ public final class Execution {
           }
         } catch (VmException e) { Program.Line line=p.lineOf(fault); if(line!=null)e.at(line); throw e; }
       }
+      return Value.none();
     } finally { owner.exitRun(ctx); }
   }
 

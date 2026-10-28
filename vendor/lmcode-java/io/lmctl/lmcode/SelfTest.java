@@ -20,6 +20,7 @@ public final class SelfTest {
   /** Returns the number of failed checks; zero is a successful self-test. */
   public static int runTests() {
     int checks = 0, failures = 0;
+    try { checks++; EntryChecks.main(new String[0]); } catch (Throwable e) { failures++; e.printStackTrace(System.err); }
     try { checks++; strings(); } catch (Throwable e) { failures++; e.printStackTrace(System.err); }
     try { checks++; formatting(); } catch (Throwable e) { failures++; e.printStackTrace(System.err); }
     try { checks++; registry(); } catch (Throwable e) { failures++; e.printStackTrace(System.err); }
@@ -136,10 +137,10 @@ public final class SelfTest {
     try {
       ByteArrayOutputStream bytes = new ByteArrayOutputStream();
       DataOutputStream d = new DataOutputStream(bytes);
-      d.writeBytes("DSLB"); d.writeShort(5);
+      d.writeBytes("DSLB"); d.writeShort(6);
       d.write(MessageDigest.getInstance("SHA-256").digest(new byte[0]));
       d.writeInt(0); d.writeShort(0); d.writeShort(0); d.writeShort(0); d.writeShort(1);
-      d.writeInt(code.length); d.write(code); d.writeInt(0); d.flush();
+      d.writeInt(code.length); d.write(code); d.writeInt(0); d.writeShort(0); d.flush();
       return bytes.toByteArray();
     } catch (Exception e) { throw new AssertionError(e); }
   }

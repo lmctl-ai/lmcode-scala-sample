@@ -3,12 +3,10 @@ package io.lmctl.lmcode;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 /** Regression pin for compiler rule methods (R47/R48): a schema may carry a top-level
-  * "interfaces" map of SAM signatures, and bytecode from an annotated `implements` fn must
-  * load and run unchanged. Fixtures under src/test/resources/rule-methods were compiled with
+  * "interfaces" map of SAM signatures, and annotated functions provide callable entries while preserving body behavior. Fixtures under src/test/resources/rule-methods were compiled with
   * an R47/R48 lmscript (LMSCRIPT_BIN); plain.lms keeps a blank line where annotated.lms has
   * the @PRICE_RULE annotation so source-map line numbers align. */
 public final class RuleMethodsPin {
@@ -34,7 +32,11 @@ public final class RuleMethodsPin {
     Program.load(plain, schema, registry).run(new Context(), registry);
     require(out.equals(List.of("adjust 41")), "unannotated program output: " + out);
 
-    require(Arrays.equals(annotated, plain), "@PRICE_RULE plus implements Adjuster must leave no trace in compiled bytes");
+    Program rules=Program.load(annotated,schema,registry);
+    require(rules.entries().size()==1&&rules.entries().getFirst().annotation().equals("PRICE_RULE"),"annotation emits one entry");
+    require(Program.load(plain,schema,registry).entries().isEmpty(),"plain functions are not entries");
+    out.clear();rules.call(0,new Context(),registry,List.of(Value.ofInt(12)));
+    require(out.equals(List.of("adjust 12")),"rule call initializes its parameter");
 
     boolean mismatch = false;
     try { Program.load(annotated, withoutInterfaces, registry); }
