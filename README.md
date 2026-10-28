@@ -4,7 +4,7 @@
 Read these three files first: [domain and bindings](src/main/scala/shop/Shop.scala),
 [CLI protocol](src/main/scala/shop/Main.scala), and [byte-exact output](src/main/scala/shop/Protocol.scala).
 The SDK is the Java 21 `io.lmctl.lmcode` package (catalog v3, 181 signatures), vendored unchanged in
-`vendor/lmcode-java/`. `./test.sh` passes all 90 corpus cases byte-for-byte.
+`vendor/lmcode-java/`. `./test.sh` passes all 91 corpus cases byte-for-byte.
 You need a JDK 21, [sbt](https://www.scala-sbt.org/), Python 3 and `lmscript >= 0.2.420`.
 
 ```sh
@@ -12,12 +12,18 @@ npm install --global @lmctl-ai/lmctl@0.2.420
 ./test.sh
 ```
 
+Case 067 uses R47/R48 rule methods; reproducing its pinned bytecode needs a rule-methods-capable compiler,
+so set `LMSCRIPT_BIN` to a current lmctl-mono `lmscript` build until a containing release is published
+(see [sample-suite/README.md](sample-suite/README.md)). Runtime execution of the pinned bytecode works on
+any compiler version, since annotations and interface bindings are compile-time metadata only.
+
 ## Write a host in Scala in ten steps
 
 1. **Choose a small domain.** `Shop` owns three priced items; `Ledger` records entries;
    `Money` is signed int64 cents. Read the [portable contract](sample-suite/CONTRACT.md).
 2. **Declare the API.** [host.schema.json](sample-suite/host.schema.json) lists the contexts,
-   object types, `Currency`, overloads and void methods. [sample.dsl.json](sample-suite/sample.dsl.json)
+   object types, `Currency`, overloads, void methods and one SAM interface (`Adjuster`, `(Money) -> void`)
+   under `interfaces`. [sample.dsl.json](sample-suite/sample.dsl.json)
    merges that domain with the standard catalog. The host loads the schema from the classpath
    (`build.sbt` copies the file), so the bytes are exactly the corpus bytes.
 3. **Pin dependencies.** [sdk.lock](sdk.lock) and [suite.lock](suite.lock) hash every vendored file;
@@ -33,7 +39,7 @@ npm install --global @lmctl-ai/lmctl@0.2.420
    its receiver; `note(string)` returns `Value.none()`.
 7. **Include standard and testing functions deliberately.** `new Registry()` installs the string, math,
    collection and file catalogs; `Stdlib.registerTesting` adds `print` and `assert_close` (an explicit opt-in).
-   The [coverage audit](sample-suite/audit.py) checks all 72 standard signatures are imported by the corpus.
+   The [coverage audit](sample-suite/audit.py) checks all 181 standard signatures are imported by the corpus.
 8. **Compile, never interpret source in the host.** The corpus wrappers use `_lmcode_`/`savedsl`; the
    `.dslb` bytecode is committed. The host loads it with `Program.load(bytes, schema, registry)`, and
    [`check-bytecode.py`](scripts/check-bytecode.py) recompiles to prove the pinned bytes reproduce.
@@ -65,6 +71,7 @@ npm install --global @lmctl-ai/lmctl@0.2.420
 | Nested inline error, 1,000,000-iteration loop, deep inlining, 255 arguments, 128-byte names | 057–061 |
 | Null receiver, wrong runtime handle, invalid float prices, null Money through a method | 062–066 |
 | Native conversion probes: scalars, bytes, hex, handle identity, typed null, wrong-typed handle, copies, `host_sum` | 049–066 (probes) |
+| `@NAME` rule method annotation and `implements` SAM interface | 067 |
 | Typed int and float maps (`int_map`, `float_map`) | 101 |
 | Int, float and string containers: stacks, queues, priority queues | 102–104 |
 | Json parse, navigation, object key order, kind errors | 105, 108 |
@@ -121,8 +128,10 @@ The CI matrix runs `./test.sh` on Linux x64/arm64, macOS arm64/x64 and Windows x
 - The schema declares 45 host signatures (the shop domain plus the native conversion probes) and the full v3
   standard catalog (181 signatures). The port registers exactly the declared host surface; `--dsl-signatures` must equal the
   schema-derived list, and the protocol check enforces it.
-- Programs 201–205 need `lmcode-literals-v1`, a compiler feature from lmctl-mono `0ce49614`, which lmscript 0.2.420
-  lacks. Their pinned bytecode still runs in the 90-case check. `scripts/check-bytecode.py` (the canonical
-  `sample-suite/check-recompile.py`) recompiles the 85 other cases and reports the exclusion instead of hiding it; use `LMSCRIPT_BIN` with a literal-capable build for the full check.
+- Programs 201–205 need `lmcode-literals-v1`, a compiler feature from lmctl-mono `0ce49614`, and program 067
+  needs `lmcode-rule-methods-v1` (R47/R48); lmscript 0.2.420 lacks both. Their pinned bytecode still runs in the
+  91-case check. `scripts/check-bytecode.py` (the canonical `sample-suite/check-recompile.py`) reproduces all 91
+  pinned cases with a current `LMSCRIPT_BIN`; with the released 0.2.420 compiler the reproduction check fails
+  explicitly on the unsupported features instead of hiding them.
 - Messages from `Ledger.reject` decode the byte string as UTF-8 (`VmException` takes a `String`). Corpus messages are
   ASCII; a port that must keep arbitrary bytes in error messages needs a byte-carrying error type.
