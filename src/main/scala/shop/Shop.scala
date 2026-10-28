@@ -53,6 +53,12 @@ final class Host:
   def context: Context =
     Context().set("shop", handle("Shop", shop)).set("ledger", handle("Ledger", ledger))
 
+  /** Rule-entry dispatch handles (CONTRACT.md): the shop's items in order. */
+  def itemHandles: Vector[Money] = shop.items.values
+
+  /** The same total the Shop.total() callback computes, as a fresh arena-owned Money handle. */
+  def totalHandle: Value = money(shop.items.values.foldLeft(0L)(_ + _.cents))
+
   // --- Binding helpers (shared through Bind) ----------------------------------------------------
 
   private def params(names: String*): java.util.List[String] = Bind.params(names*)

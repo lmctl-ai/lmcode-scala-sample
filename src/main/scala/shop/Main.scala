@@ -1,6 +1,6 @@
 package shop
 
-import io.lmctl.lmcode.{Program, VmException}
+import io.lmctl.lmcode.{Context, Formatting, Program, Registry, Value, VmException}
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.{Files, Path}
 
@@ -46,7 +46,27 @@ object Main:
 
   /** Run one loaded program. Its trace lines were already written by `print`; the result line comes last. */
   private def runLoaded(program: Program, host: Host): Int =
-    try program.run(host.context, host.registry)
+    val context = host.context
+    try program.run(context, host.registry)
+    catch
+      case error: VmException =>
+        Protocol.vmFailure("run", error, error.getMessage.getBytes(UTF_8))
+        return 3
+    // Rule entries (DSLB v6): after the body, @item entries run once per shop
+    // item in order, @total once with the shop total, other annotations never.
+    var entriesCalled = 0
+    val entries = program.entries()
+    try
+      for i <- 0 until entries.size() do
+        entries.get(i).annotation() match
+          case "item" =>
+            for item <- host.itemHandles do
+              callEntry(program, i, context, host.registry, Bind.handle("Money", item))
+              entriesCalled += 1
+          case "total" =>
+            callEntry(program, i, context, host.registry, host.totalHandle)
+            entriesCalled += 1
+          case _ => ()
     catch
       case error: VmException =>
         Protocol.vmFailure("run", error, error.getMessage.getBytes(UTF_8))
@@ -55,8 +75,28 @@ object Main:
     if host.ledger.balance < 0 then return appFailure("ledger: negative balance")
     val note = Protocol.jsonString(host.ledger.note.bytes)
     val result = s"{\"balance\": ${host.ledger.balance}, \"entries\": ${host.ledger.entries}, \"note\": "
-    Protocol.ok(concat(result.getBytes(UTF_8), note, "}".getBytes(UTF_8)))
+    Protocol.ok(concat(result.getBytes(UTF_8), note, s", \"entries_called\": $entriesCalled}".getBytes(UTF_8)))
     0
+
+  /** Call rule entry `index` with one argument; a non-void result prints `entry NAME = VALUE`. */
+  private def callEntry(program: Program, index: Int, context: Context, registry: Registry, argument: Value): Unit =
+    val result = program.call(index, context, registry, java.util.List.of(argument))
+    if result.kind() != Value.Kind.NONE then
+      Protocol.emit(concat(
+        "entry ".getBytes(UTF_8),
+        program.entries().get(index).name().getBytes(UTF_8),
+        " = ".getBytes(UTF_8),
+        valueText(result),
+        "\n".getBytes(UTF_8)))
+
+  /** Same text as the language's str(): int decimal, float %.15g semantics, bool true/false, string raw bytes. */
+  private def valueText(value: Value): Array[Byte] =
+    value.kind() match
+      case Value.Kind.INT   => value.asInt.toString.getBytes(UTF_8)
+      case Value.Kind.FLOAT => Formatting.formatG15(value.asFloat).getBytes(UTF_8)
+      case Value.Kind.BOOL  => (if value.asBool then "true" else "false").getBytes(UTF_8)
+      case Value.Kind.STR   => value.asString.bytes
+      case _                => Array.emptyByteArray
 
   /** Loader wording is normalized so every port reports the same portable message. */
   private def loadFailure(error: VmException): Int =
