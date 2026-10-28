@@ -4,26 +4,26 @@
 Read these three files first: [domain and bindings](src/main/scala/shop/Shop.scala),
 [CLI protocol](src/main/scala/shop/Main.scala), and [byte-exact output](src/main/scala/shop/Protocol.scala).
 The SDK is the Java 21 `io.lmctl.lmcode` package (catalog v3, 181 signatures), vendored unchanged in
-`vendor/lmcode-java/`. `./test.sh` passes all 91 corpus cases byte-for-byte.
-You need a JDK 21, [sbt](https://www.scala-sbt.org/), Python 3 and `lmscript >= 0.2.420`.
+`vendor/lmcode-java/`. `./test.sh` passes all 94 corpus cases byte-for-byte.
+You need a JDK 21, [sbt](https://www.scala-sbt.org/), Python 3 and a v6-entries-capable `lmscript`.
 
 ```sh
-npm install --global @lmctl-ai/lmctl@0.2.420
-./test.sh
+LMSCRIPT_BIN=/path/to/v6-entries-capable/lmscript ./test.sh
 ```
 
-Case 067 uses R47/R48 rule methods; reproducing its pinned bytecode needs a rule-methods-capable compiler,
-so set `LMSCRIPT_BIN` to a current lmctl-mono `lmscript` build until a containing release is published
-(see [sample-suite/README.md](sample-suite/README.md)). Runtime execution of the pinned bytecode works on
-any compiler version, since annotations and interface bindings are compile-time metadata only.
+The corpus is DSLB v6 (R49 rule entries): reproducing the pinned bytecode needs the v6-entries compiler
+from lmctl-mono, so set `LMSCRIPT_BIN` to its built `lmscript` — published releases (including the first
+rule-methods-capable `@lmctl-ai/lmctl@0.2.442`) cannot reproduce the v6 corpus yet
+(see [sample-suite/README.md](sample-suite/README.md)). The vendored v6 SDK runs the pinned bytes directly
+and refuses v5 files at load (093).
 
 ## Write a host in Scala in ten steps
 
 1. **Choose a small domain.** `Shop` owns three priced items; `Ledger` records entries;
    `Money` is signed int64 cents. Read the [portable contract](sample-suite/CONTRACT.md).
 2. **Declare the API.** [host.schema.json](sample-suite/host.schema.json) lists the contexts,
-   object types, `Currency`, overloads, void methods and one SAM interface (`Adjuster`, `(Money) -> void`)
-   under `interfaces`. [sample.dsl.json](sample-suite/sample.dsl.json)
+   object types, `Currency`, overloads, void methods and two SAM interfaces (`Adjuster`, `(Money) -> void`;
+   `Score`, `(Money) -> int`) under `interfaces`. [sample.dsl.json](sample-suite/sample.dsl.json)
    merges that domain with the standard catalog. The host loads the schema from the classpath
    (`build.sbt` copies the file), so the bytes are exactly the corpus bytes.
 3. **Pin dependencies.** [sdk.lock](sdk.lock) and [suite.lock](suite.lock) hash every vendored file;
@@ -45,8 +45,11 @@ any compiler version, since annotations and interface bindings are compile-time 
    [`check-bytecode.py`](scripts/check-bytecode.py) recompiles to prove the pinned bytes reproduce.
 9. **Handle errors at the right boundary.** [Main.scala](src/main/scala/shop/Main.scala) prints one JSON
    result after the program's trace lines: success 0, usage 2, load or run error 3, application failure 4.
-   A `VmException` keeps its SDK `code`, line and column; loader wording is normalized. A negative final
-   balance is an application rule, checked only after the VM succeeds.
+   A `VmException` keeps its SDK `code`, line and column; loader wording is normalized. After the body runs,
+   the host calls the program's rule entries (`Program.entries()` / `Program.call(...)`): each `@item` entry
+   once per shop item in order, each `@total` entry once with the shop total, others never; non-void results
+   print `entry NAME = VALUE` lines and the result object reports the call count as `"entries_called"`.
+   A negative final balance is an application rule, checked only after the VM succeeds.
 10. **Run the shared integration test.** `test.sh` runs [run-suite.sh](sample-suite/run-suite.sh) with the
     command `java -cp <classpath> shop.Main`. Each case gets a fresh `SAMPLE_TMP`; stdout bytes and exit
     codes must match exactly, and stderr must be empty.
@@ -72,12 +75,13 @@ any compiler version, since annotations and interface bindings are compile-time 
 | Null receiver, wrong runtime handle, invalid float prices, null Money through a method | 062–066 |
 | Native conversion probes: scalars, bytes, hex, handle identity, typed null, wrong-typed handle, copies, `host_sum` | 049–066 (probes) |
 | `@NAME` rule method annotation and `implements` SAM interface | 067 |
+| Rule entries called by the host after the body (`@item`/`@total`, `entries_called`) | 068–069 |
 | Typed int and float maps (`int_map`, `float_map`) | 101 |
 | Int, float and string containers: stacks, queues, priority queues | 102–104 |
 | Json parse, navigation, object key order, kind errors | 105, 108 |
 | Stack underflow and non-finite priority traps | 106–107 |
 | Literal forms: words, numbers, maps, Json, bindings (needs `lmcode-literals-v1`, see below) | 201–205 |
-| Loader rejection: bad bytecode, schema mismatch, wrong handle import | 090–092 |
+| Loader rejection: bad bytecode, schema mismatch, wrong handle import, v5 bytecode refused | 090–093 |
 | Std v3 byte codecs (base64, hex), number and string map snapshots, codec boundaries and invalid-input traps | 301–305, 311–313 |
 
 The full feature-to-program matrix, with links to every source, bytecode and expectation, is in
@@ -121,17 +125,18 @@ python3 scripts/sync.py sdk ../lmcode-java       # pins the committed SDK source
 ```
 
 Never edit anything under `vendor/` or `sample-suite/` here; sync from the canonical source instead.
-The CI matrix runs `./test.sh` on Linux x64/arm64, macOS arm64/x64 and Windows x64 with lmscript 0.2.420.
+The CI matrix runs `./test.sh` on Linux x64/arm64, macOS arm64/x64 and Windows x64; its compiler input must
+be v6-entries-capable (the workflow's published default cannot reproduce the v6 corpus yet).
 
 ## Notes for the next port
 
 - The schema declares 45 host signatures (the shop domain plus the native conversion probes) and the full v3
   standard catalog (181 signatures). The port registers exactly the declared host surface; `--dsl-signatures` must equal the
   schema-derived list, and the protocol check enforces it.
-- Programs 201–205 need `lmcode-literals-v1`, a compiler feature from lmctl-mono `0ce49614`, and program 067
-  needs `lmcode-rule-methods-v1` (R47/R48); lmscript 0.2.420 lacks both. Their pinned bytecode still runs in the
-  91-case check. `scripts/check-bytecode.py` (the canonical `sample-suite/check-recompile.py`) reproduces all 91
-  pinned cases with a current `LMSCRIPT_BIN`; with the released 0.2.420 compiler the reproduction check fails
-  explicitly on the unsupported features instead of hiding them.
+- Programs 201–205 need `lmcode-literals-v1`, program 067 needs `lmcode-rule-methods-v1` (R47/R48) and
+  programs 068–069 need `lmcode-rule-entries-v1` (R49, DSLB v6); no published lmscript (including 0.2.442)
+  has all three. Their pinned bytecode still runs in the 94-case check. `scripts/check-bytecode.py` (the
+  canonical `sample-suite/check-recompile.py`) reproduces all 94 pinned cases with a v6-entries-capable
+  `LMSCRIPT_BIN`; a released compiler fails the reproduction check explicitly instead of hiding the gap.
 - Messages from `Ledger.reject` decode the byte string as UTF-8 (`VmException` takes a `String`). Corpus messages are
   ASCII; a port that must keep arbitrary bytes in error messages needs a byte-carrying error type.
