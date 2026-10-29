@@ -1,0 +1,33 @@
+import "./sample-suite/runner-lib.lms";
+root = suite_root();
+fn step(command) {
+  result = invoke(suite_root(), command, [], {}, 1800000);
+  print(result.stdout);
+  print(result.stderr);
+  assert(result.code == 0 && result.error == "", "test step failed: " + json_stringify(command) + " " + result.error);
+}
+python = "python3";
+if (env("RUNNER_OS") == "Windows") { python = "python"; }
+step([python, "-B", "scripts/sync.py", "check"]);
+step(["bash", "scripts/build-jvm.sh"]);
+jvm = ["java", "-cp", trim(read_file("target/runtime-classpath.txt")), "shop.Main"];
+step(concat(compiler_command(), ["--no-preflight", "sample-suite/audit.lms", "--std", "vendor/lmcode-java/std/lmcode-std.schema.json"]));
+step(concat(compiler_command(), ["--no-preflight", "sample-suite/run-suite.lms"], jvm));
+step(concat(compiler_command(), ["--no-preflight", "sample-suite/check-recompile.lms"]));
+step(concat(compiler_command(), ["--no-preflight", "sample-suite/test-runner.lms"]));
+step(concat(compiler_command(), ["--no-preflight", "examples/rule-entries.lms", path_join(Directory, "build/rule-entries.dslb")]));
+expected = binary(root, {op:"hex", path:path_join(root, "expected/068-rule-entries.out")});
+fn example(command, expected) {
+  r = invoke(suite_root(), command, ["--dsl", path_join(Directory, "build/rule-entries.dslb")], {}, 30000);
+  assert(r.code == 0 && r.hex == expected && r.stderr_hex == "", "annotated interface example differs");
+}
+example(jvm, expected);
+if (env("RUN_NATIVE") == "1") {
+  step(["bash", "scripts/build-native.sh"]);
+  executable = path_join(Directory, "build/lmcode-scala-sample");
+  if (env("RUNNER_OS") == "Windows") { executable = executable + ".exe"; }
+  step(concat(compiler_command(), ["--no-preflight", "sample-suite/run-suite.lms", executable]));
+  example([executable], expected);
+  println("PASS GraalVM native executable");
+}
+println("PASS annotated interface example");

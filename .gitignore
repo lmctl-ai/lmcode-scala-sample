@@ -7,3 +7,5 @@ project/project/
 __pycache__/
 *.pyc
 .ci-bin/
+
+/build/

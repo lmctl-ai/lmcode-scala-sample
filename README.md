@@ -11,11 +11,8 @@ You need a JDK 21, [sbt](https://www.scala-sbt.org/), Python 3 and a v6-entries-
 LMSCRIPT_BIN=/path/to/v6-entries-capable/lmscript ./test.sh
 ```
 
-The corpus is DSLB v6 (R49 rule entries): reproducing the pinned bytecode needs the v6-entries compiler
-from lmctl-mono, so set `LMSCRIPT_BIN` to its built `lmscript` — published releases (including the first
-rule-methods-capable `@lmctl-ai/lmctl@0.2.442`) cannot reproduce the v6 corpus yet
-(see [sample-suite/README.md](sample-suite/README.md)). The vendored v6 SDK runs the pinned bytes directly
-and refuses v5 files at load (093).
+The corpus is DSLB v6. Install `@lmctl-ai/lmctl` from npm; version 0.2.444
+or newer can reproduce these pinned sources. The SDK refuses v5 bytecode.
 
 ## Write a host in Scala in ten steps
 
@@ -39,7 +36,7 @@ and refuses v5 files at load (093).
    its receiver; `note(string)` returns `Value.none()`.
 7. **Include standard and testing functions deliberately.** `new Registry()` installs the string, math,
    collection and file catalogs; `Stdlib.registerTesting` adds `print` and `assert_close` (an explicit opt-in).
-   The [coverage audit](sample-suite/audit.py) checks all 181 standard signatures are imported by the corpus.
+   The [coverage audit](sample-suite/audit.lms) checks all 181 standard signatures are imported by the corpus.
 8. **Compile, never interpret source in the host.** The corpus wrappers use `_lmcode_`/`savedsl`; the
    `.dslb` bytecode is committed. The host loads it with `Program.load(bytes, schema, registry)`, and
    [`check-bytecode.py`](scripts/check-bytecode.py) recompiles to prove the pinned bytes reproduce.
@@ -125,18 +122,46 @@ python3 scripts/sync.py sdk ../lmcode-java       # pins the committed SDK source
 ```
 
 Never edit anything under `vendor/` or `sample-suite/` here; sync from the canonical source instead.
-The CI matrix runs `./test.sh` on Linux x64/arm64, macOS arm64/x64 and Windows x64; its compiler input must
-be v6-entries-capable (the workflow's published default cannot reproduce the v6 corpus yet).
+The CI matrix runs `test.lms` on Linux x64/arm64, macOS arm64/x64 and Windows x64 using the npm-installed compiler.
 
 ## Notes for the next port
 
 - The schema declares 45 host signatures (the shop domain plus the native conversion probes) and the full v3
   standard catalog (181 signatures). The port registers exactly the declared host surface; `--dsl-signatures` must equal the
   schema-derived list, and the protocol check enforces it.
-- Programs 201–205 need `lmcode-literals-v1`, program 067 needs `lmcode-rule-methods-v1` (R47/R48) and
-  programs 068–069 need `lmcode-rule-entries-v1` (R49, DSLB v6); no published lmscript (including 0.2.442)
-  has all three. Their pinned bytecode still runs in the 94-case check. `scripts/check-bytecode.py` (the
-  canonical `sample-suite/check-recompile.py`) reproduces all 94 pinned cases with a v6-entries-capable
-  `LMSCRIPT_BIN`; a released compiler fails the reproduction check explicitly instead of hiding the gap.
+- Programs 201–205 exercise literal forms, 067 annotated interfaces, and 068–069 v6
+  rule entries. `sample-suite/check-recompile.lms` reproduces all 94 pinned cases;
+  older compilers fail explicitly instead of reporting a partial pass.
 - Messages from `Ledger.reject` decode the byte string as UTF-8 (`VmException` takes a `String`). Corpus messages are
   ASCII; a port that must keep arbitrary bytes in error messages needs a byte-carrying error type.
+
+## lmscript tests and automatic native releases
+
+```sh
+npm install -g @lmctl-ai/lmctl
+lmctl test.lms
+# Equivalent: lmscript test.lms
+# With GraalVM 21 and native compiler tools on PATH:
+RUN_NATIVE=1 lmscript --no-preflight test.lms
+```
+
+Both executables run `.lms` files; `lmctl` also accepts URLs ending in `.lms`.
+These tests require the checkout and run from its root. Python is used only
+for lock validation/synchronization; test orchestration uses the canonical
+lmscript drivers. Node supplies the byte-preserving process adapter.
+
+[examples/rule-entries.lms](examples/rule-entries.lms) demonstrates `@item`
+and `@total` functions implementing `Adjuster(Money) -> void`, plus an
+undispatched `@never` entry. Tests compile it and compare the exact trace.
+The canonical program 069 demonstrates an interface returning a value.
+
+Every push to `main` builds with GraalVM Community 21 on Linux x64/arm64,
+macOS x64/arm64 and Windows x64. Each job tests the JVM host and all 94
+cases against the native executable. All five must pass before an automatic
+`v0.4.<workflow run number>` release is published with checksums and notices.
+Pull requests run the same checks without publishing. Native executables
+require no JVM; Linux targets glibc and Windows requires the MSVC runtime.
+
+```sh
+lmscript install github:lmctl-ai/lmcode-scala-sample@latest
+```

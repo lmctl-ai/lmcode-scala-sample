@@ -9,7 +9,12 @@ import java.nio.file.{Files, Path}
   * Exit codes: 0 success, 2 usage, 3 load or run error, 4 application failure.
   */
 object Main:
-  private val Version = "lmcode-scala-sample 0.1.0"
+  private val Version = {
+    val in = getClass.getResourceAsStream("/sample-version.txt")
+    if in == null then throw IllegalStateException("missing sample-version.txt")
+    try "lmcode-scala-sample " + String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim
+    finally in.close()
+  }
   private val Usage = "usage: --version | --dsl-schema [--json] | --dsl-signatures | --dsl FILE"
 
   def main(args: Array[String]): Unit =

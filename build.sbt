@@ -20,7 +20,9 @@ lazy val sample = (project in file("."))
       val source = baseDirectory.value / "sample-suite" / "sample.dsl.json"
       val target = (Compile / resourceManaged).value / "sample.dsl.json"
       IO.copyFile(source, target)
-      Seq(target)
+      val versionFile = (Compile / resourceManaged).value / "sample-version.txt"
+      IO.write(versionFile, sys.env.getOrElse("SAMPLE_VERSION", "0.4.0") + "\n")
+      Seq(target, versionFile)
     }.taskValue,
     writeRuntimeClasspath := {
       val file = target.value / "runtime-classpath.txt"
