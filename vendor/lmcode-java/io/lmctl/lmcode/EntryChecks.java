@@ -19,10 +19,13 @@ public final class EntryChecks {
     }catch(Exception e){throw new AssertionError(e);}
   }
   static byte[] valid(){return fixture(6,0,1,1,3,0,"interface Step(int) -> int",new byte[]{4,0,0,17});}
+  // WP11 fixes: duplicate entry names and STORE_LOCAL to a hidden non-loop local are refused.
+  static byte[] duplicateName(){byte[] b=valid();int record=12+2+2+5+2+4+4+4+10,count=b.length-record-2;var out=new ByteArrayOutputStream();out.write(b,0,count);out.write(0);out.write(2);out.write(b,count+2,record);out.write(b,count+2,record);return out.toByteArray();}
+  static byte[] hiddenStore(){byte[] b=fixture(6,0,1,2,3,0,"interface Step(int) -> int",new byte[]{4,0,0,5,0,1,4,0,0,17});int record=12+2+2+10+2+4+10+4+10;b[b.length-record+25]=1;return b;}
   static void refuse(String label,byte[] bytes,String text){try{Program.load(bytes,new byte[0],new Registry(false));throw new AssertionError(label+": accepted malformed entry");}catch(VmException e){check(e.code.equals("LOAD_BAD_BYTECODE")&&e.getMessage().contains(text),label+": "+e.getMessage());}System.out.println("PASS refusal "+label);}
   static void check(boolean yes,String message){if(!yes)throw new AssertionError(message);}
   public static void main(String[] args){int failed=0;var checks=new LinkedHashMap<String,Runnable>();
-    checks.put("v5",()->refuse("v5",fixture(5,0,1,1,3,0,"interface Step(int) -> int",new byte[]{4,0,0,17}),"unsupported bytecode version 5 (this runtime reads version 6)"));
+    checks.put("v5",()->refuse("v5",fixture(5,0,1,1,3,0,"interface Step(int) -> int",new byte[]{4,0,0,17}),"unsupported bytecode version 5 (this runtime reads version 6)"));checks.put("duplicate name",()->refuse("duplicate name",duplicateName(),"duplicate entry name 'increment'"));checks.put("hidden store",()->refuse("hidden store",hiddenStore(),"writes compiler-owned loop local 1"));
     checks.put("constant",()->refuse("constant",fixture(6,99,1,1,3,0,"interface Step(int) -> int",new byte[]{4,0,0,17}),"constant index 99"));
     checks.put("interface",()->refuse("interface",fixture(6,0,1,1,3,0,"fn Step(int) -> int",new byte[]{4,0,0,17}),"entry 'increment': interface"));
     checks.put("params count",()->refuse("params count",fixture(6,0,0,1,3,0,"interface Step(int) -> int",new byte[]{4,0,0,17}),"entry 'increment' declares 0 parameter(s); interface Step(int) -> int has 1"));

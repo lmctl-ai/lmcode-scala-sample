@@ -336,6 +336,98 @@ final class StdJson {
     return (Node) StdCollections.unwrap(self);
   }
 
+
+  private static final String TEMPLATE_PATH="[A-Za-z_][A-Za-z0-9_]*(?:[.][A-Za-z_][A-Za-z0-9_]*|\\[[0-9]+\\])*";
+  private static final java.util.regex.Pattern TEMPLATE_HEAD=java.util.regex.Pattern.compile("^<("+TEMPLATE_PATH+")(?::\\{([A-Za-z_][A-Za-z0-9_]*)\\||>)");
+  private static final java.util.regex.Pattern TEMPLATE_IF=java.util.regex.Pattern.compile("^<if\\(("+TEMPLATE_PATH+")\\)>");
+  private static final java.util.regex.Pattern TEMPLATE_PART=java.util.regex.Pattern.compile("[A-Za-z_][A-Za-z0-9_]*|\\[[0-9]+\\]");
+  private static final java.util.regex.Pattern TEMPLATE_CLOSE=java.util.regex.Pattern.compile("^};[ ]*separator[ ]*=[ ]*(\"(?:[^\"\\\\]|\\\\.)*\")>");
+  private static final class TemplateNode {
+    String text="",path="",item="",separator="";
+    boolean conditional;
+    List<TemplateNode> body=List.of(),otherwise=List.of();
+  }
+  private static final class TemplateParser {
+    final String source; int pos; String ending="";
+    TemplateParser(String source){this.source=source;}
+    void flush(List<TemplateNode> nodes,StringBuilder literal) {
+      if(literal.length()>0){TemplateNode n=new TemplateNode();n.text=literal.toString();nodes.add(n);literal.setLength(0);}
+    }
+    List<TemplateNode> parse(String mode,int depth) {
+      if(depth>256)throw VmException.host("template_render: maximum nesting exceeded");
+      List<TemplateNode> nodes=new ArrayList<>();StringBuilder literal=new StringBuilder();
+      while(pos<source.length()) {
+        String rest=source.substring(pos);
+        if(mode.equals("loop") && rest.startsWith("}>")) {flush(nodes,literal);pos+=2;ending="";return nodes;}
+        if(mode.equals("loop") && rest.startsWith("};")) {
+          var m=TEMPLATE_CLOSE.matcher(rest);if(!m.find())throw VmException.host("template_render: invalid loop separator");
+          byte[] raw=m.group(1).getBytes(StandardCharsets.ISO_8859_1);
+          try {utf8(raw,0);ending=new String(new Parser(raw).val(0).text.bytes(),StandardCharsets.ISO_8859_1);}
+          catch(VmException e){throw VmException.host("template_render: invalid loop separator");}
+          flush(nodes,literal);pos+=m.end();return nodes;
+        }
+        if(rest.startsWith("<<")){literal.append('<');pos+=2;continue;}
+        if(rest.startsWith("<else>") || rest.startsWith("<endif>")) {
+          String tag=rest.startsWith("<else>")?"else":"endif";
+          if((!mode.equals("if") && !mode.equals("else")) || (mode.equals("else") && tag.equals("else")))throw VmException.host("template_render: unexpected conditional delimiter");
+          flush(nodes,literal);pos+=tag.equals("else")?6:7;ending=tag;return nodes;
+        }
+        var conditional=TEMPLATE_IF.matcher(rest);
+        if(conditional.find()){
+          flush(nodes,literal);pos+=conditional.end();TemplateNode n=new TemplateNode();n.path=conditional.group(1);n.conditional=true;
+          n.body=parse("if",depth+1);if(ending.equals("else"))n.otherwise=parse("else",depth+1);nodes.add(n);continue;
+        }
+        var m=TEMPLATE_HEAD.matcher(rest);
+        if(!m.find()){literal.append(source.charAt(pos++));continue;}
+        flush(nodes,literal);pos+=m.end();TemplateNode n=new TemplateNode();n.path=m.group(1);n.item=m.group(2)==null?"":m.group(2);
+        if(!n.item.isEmpty()){
+          if(n.item.equals("index"))throw VmException.host("template_render: index is reserved");
+          n.body=parse("loop",depth+1);n.separator=ending;
+        }
+        nodes.add(n);
+      }
+      if(!mode.isEmpty())throw VmException.host("template_render: unterminated block");
+      flush(nodes,literal);return nodes;
+    }
+  }
+  private static String jsonText(Node n) {
+    ByteArrayOutputStream out=new ByteArrayOutputStream();emit(n,out);return out.toString(StandardCharsets.ISO_8859_1);
+  }
+  private static Node templateLookup(Node context,Map<String,Node> locals,String path) {
+    var parts=TEMPLATE_PART.matcher(path);Node n=context;boolean first=true;
+    while(parts.find()){
+      String key=parts.group();
+      if(first){first=false;if(locals.containsKey(key)){n=locals.get(key);continue;}}
+      Node next=null;
+      if(key.startsWith("[")){
+        String digits=key.substring(1,key.length()-1);
+        if(n.kind==Kind.ARRAY)try{int i=Integer.parseInt(digits);if(i>=0 && i<n.array.size() && Integer.toString(i).equals(digits))next=n.array.get(i);}catch(NumberFormatException ignored){}
+      }else if(n.kind==Kind.OBJECT)for(Member m:n.object)if(new String(m.key.bytes(),StandardCharsets.ISO_8859_1).equals(key)){next=m.value;break;}
+      if(next==null)throw VmException.host("template_render: missing variable "+path);n=next;
+    }
+    return n;
+  }
+  private static void evaluateTemplate(List<TemplateNode> nodes,Node context,Map<String,Node> locals,StringBuilder out) {
+    for(TemplateNode n:nodes){
+      if(n.path.isEmpty()){out.append(n.text);continue;}
+      Node value=templateLookup(context,locals,n.path);
+      if(n.conditional){
+        if(value.kind!=Kind.BOOL)throw VmException.host("template_render: condition requires a bool: "+n.path);
+        evaluateTemplate(value.booleanValue?n.body:n.otherwise,context,locals,out);continue;
+      }
+      if(n.item.isEmpty()){out.append(value.kind==Kind.STRING?new String(value.text.bytes(),StandardCharsets.ISO_8859_1):jsonText(value));continue;}
+      if(value.kind!=Kind.ARRAY)throw VmException.host("template_render: loop requires a list: "+n.path);
+      Map<String,Node> scope=new HashMap<>(locals);
+      for(int i=0;i<value.array.size();i++){
+        if(i>0)out.append(n.separator);Node index=new Node();index.kind=Kind.INT;index.raw=VmString.fromString(Integer.toString(i));index.integerValue=i;
+        scope.put(n.item,value.array.get(i));scope.put("index",index);evaluateTemplate(n.body,context,scope,out);
+      }
+    }
+  }
+  private static String renderTemplate(String source,Node context) {
+    var nodes=new TemplateParser(source).parse("",0);StringBuilder out=new StringBuilder();evaluateTemplate(nodes,context,Map.of(),out);return out.toString();
+  }
+
   static void register(Registry r) {
     r.function("json_parse", List.of("string"), "Json", (c, self, a) -> {
       byte[] s = a[0].asString().bytes();
@@ -349,6 +441,14 @@ final class StdJson {
       p.ws();
       if (p.p != s.length) fail("trailing input", p.p);
       return StdCollections.obj(c, "Json", parsed);
+    });
+    r.function("template_render", List.of("string","Json"), "string", (c,self,a) -> {
+      Node context=node(a[1]);
+      if(context.kind!=Kind.OBJECT) throw VmException.host("template_render: context must be an object");
+      String source=new String(a[0].asString().bytes(),StandardCharsets.ISO_8859_1);
+      String result=renderTemplate(source,context);
+      c.charge(result.getBytes(StandardCharsets.ISO_8859_1).length);
+      return Value.ofString(new VmString(result.getBytes(StandardCharsets.ISO_8859_1)));
     });
     r.method("Json", "kind", List.of(), "string", (c, self, a) -> Value.ofString(kindName(node(self))));
     r.method("Json", "len", List.of(), "int", (c, self, a) -> {

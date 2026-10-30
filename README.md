@@ -3,8 +3,8 @@
 **Agent entry point:** a complete Scala 3 host for the shared lmcode shop corpus, not another interpreter.
 Read these three files first: [domain and bindings](src/main/scala/shop/Shop.scala),
 [CLI protocol](src/main/scala/shop/Main.scala), and [byte-exact output](src/main/scala/shop/Protocol.scala).
-The SDK is the Java 21 `io.lmctl.lmcode` package (catalog v3, 181 signatures), vendored unchanged in
-`vendor/lmcode-java/`. `./test.sh` passes all 94 corpus cases byte-for-byte.
+The SDK is the Java 21 `io.lmctl.lmcode` package (catalog v3, 182 signatures), vendored unchanged in
+`vendor/lmcode-java/`. `./test.sh` passes all 108 corpus cases byte-for-byte.
 You need a JDK 21, [sbt](https://www.scala-sbt.org/), Python 3 and a v6-entries-capable `lmscript`.
 
 ```sh
@@ -36,7 +36,7 @@ or newer can reproduce these pinned sources. The SDK refuses v5 bytecode.
    its receiver; `note(string)` returns `Value.none()`.
 7. **Include standard and testing functions deliberately.** `new Registry()` installs the string, math,
    collection and file catalogs; `Stdlib.registerTesting` adds `print` and `assert_close` (an explicit opt-in).
-   The [coverage audit](sample-suite/audit.lms) checks all 181 standard signatures are imported by the corpus.
+   The [coverage audit](sample-suite/audit.lms) checks all 182 standard signatures are imported by the corpus.
 8. **Compile, never interpret source in the host.** The corpus wrappers use `_lmcode_`/`savedsl`; the
    `.dslb` bytecode is committed. The host loads it with `Program.load(bytes, schema, registry)`, and
    [`check-bytecode.py`](scripts/check-bytecode.py) recompiles to prove the pinned bytes reproduce.
@@ -110,7 +110,7 @@ platform newline or a Unicode conversion cannot change a byte of the reference o
 
 ```sh
 ./test.sh                              # sync check, sbt build, corpus, bytecode, runner controls
-SBT=/path/to/sbt ./test.sh             # choose an sbt binary explicitly
+S`=/path/to/sbt ./test.sh             # choose an sbt binary explicitly
 ```
 
 After a reviewed change in the canonical corpus (`lmctl-ai/lmcode-cpp/sample-suite`) or the SDK:
@@ -127,10 +127,10 @@ The CI matrix runs `test.lms` on Linux x64/arm64, macOS arm64/x64 and Windows x6
 ## Notes for the next port
 
 - The schema declares 45 host signatures (the shop domain plus the native conversion probes) and the full v3
-  standard catalog (181 signatures). The port registers exactly the declared host surface; `--dsl-signatures` must equal the
+  standard catalog (182 signatures). The port registers exactly the declared host surface; `--dsl-signatures` must equal the
   schema-derived list, and the protocol check enforces it.
 - Programs 201–205 exercise literal forms, 067 annotated interfaces, and 068–069 v6
-  rule entries. `sample-suite/check-recompile.lms` reproduces all 94 pinned cases;
+  rule entries. `sample-suite/check-recompile.lms` reproduces all 108 pinned cases;
   older compilers fail explicitly instead of reporting a partial pass.
 - Messages from `Ledger.reject` decode the byte string as UTF-8 (`VmException` takes a `String`). Corpus messages are
   ASCII; a port that must keep arbitrary bytes in error messages needs a byte-carrying error type.
@@ -156,7 +156,7 @@ undispatched `@never` entry. Tests compile it and compare the exact trace.
 The canonical program 069 demonstrates an interface returning a value.
 
 Every push to `main` builds with GraalVM Community 21 on Linux x64/arm64,
-macOS x64/arm64 and Windows x64. Each job tests the JVM host and all 94
+macOS x64/arm64 and Windows x64. Each job tests the JVM host and all 108
 cases against the native executable. All five must pass before an automatic
 `v0.4.<workflow run number>` release is published with checksums and notices.
 Pull requests run the same checks without publishing. Native executables
@@ -165,3 +165,9 @@ require no JVM; Linux targets glibc and Windows requires the MSVC runtime.
 ```sh
 lmscript install github:lmctl-ai/lmcode-scala-sample@latest
 ```
+
+## Text templates
+
+[examples/text-template.lms](examples/text-template.lms) renders ordinary text from a nested context with indexed lists, loops and boolean conditions. The standard `template_render(string, Json) -> string` function performs one pass; inserted values stay literal. Compile it with `lmscript --no-preflight examples/text-template.lms build/text-template.dslb`, then run the sample host with `--dsl build/text-template.dslb`.
+
+The lmscript-driven suite runs 108 cases, including template success/error cases. See the [portable template contract](https://github.com/lmctl-ai/lmcode-cpp/blob/main/std/template.md).

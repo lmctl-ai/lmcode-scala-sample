@@ -42,8 +42,14 @@ public final class ConformanceRunner {
  }
  static boolean match(String actual,String expected){if(!expected.startsWith("~ "))return actual.equals(expected);String body=expected.substring(2);int space=body.lastIndexOf(' ');if(space<0||!actual.startsWith(body.substring(0,space+1)))return false;try{double want=Double.parseDouble(body.substring(space+1)),got=Double.parseDouble(actual.substring(space+1));return Double.isFinite(want)&&Double.isFinite(got)&&Math.abs(got-want)<=1e-12*Math.max(Math.abs(want),1e-300);}catch(NumberFormatException e){return false;}}
  static long number(Object value){return new java.math.BigDecimal(value.toString()).longValueExact();}
+ static IllegalArgumentException bad(String what,String type){return new IllegalArgumentException("conformance: bad call args: "+what+" does not match parameter type "+type);}
  static Value argument(Object raw,String type){
-  if(raw instanceof Map<?,?> map){Map<String,Object> object=Json.object(map);return Value.object((String)object.get("type"),new Thing(number(object.get("id"))));}
+  // WP11 F5: a JSON kind that does not match the declared parameter type is a runner error, never a VM input.
+  if(raw instanceof Map<?,?> map){Map<String,Object> object=Json.object(map);String objectType=String.valueOf(object.get("type"));if(!objectType.equals(type)||!type.equals("Thing"))throw bad("object of type "+objectType,type);return Value.object("Thing",new Thing(number(object.get("id"))));}
+  if(type.equals("int")){if(!(raw instanceof Number)||raw.toString().matches(".*[.eE].*"))throw bad(String.valueOf(raw),type);return Value.ofInt(number(raw));}
+  if(type.equals("float")){if(!(raw instanceof Number))throw bad(String.valueOf(raw),type);return Value.ofFloat(((Number)raw).doubleValue());}
+  if(type.equals("bool")){if(!(raw instanceof Boolean))throw bad(String.valueOf(raw),type);return Value.ofBool((Boolean)raw);}
+  if(!(raw instanceof String))throw bad(String.valueOf(raw),type);
   return switch(type){case "int"->Value.ofInt(number(raw));case "float"->Value.ofFloat(((Number)raw).doubleValue());case "bool"->Value.ofBool((Boolean)raw);case "string", "Status"->Value.ofString((String)raw);default->throw new IllegalArgumentException("unsupported entry argument type "+type);};
  }
  static Value[] arguments(String json,List<String> params){List<Object> raw=Json.array(Json.parseExactNumbers(json));if(raw.size()!=params.size())return raw.stream().map(x->Value.none()).toArray(Value[]::new);Value[] out=new Value[raw.size()];for(int i=0;i<out.length;i++)out[i]=argument(raw.get(i),params.get(i));return out;}

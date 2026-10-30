@@ -41,6 +41,7 @@ public final class Program {
       String name="<"+i+">";
       try {
         name=p.ident((int)r.u32(),"entry name");
+        for(Rule prev:p.rules) if(prev.entry().name().equals(name)) throw VmException.badBytecode("duplicate entry name '"+name+"'");
         String annotation=p.ident((int)r.u32(),"entry annotation"),iface=p.ident((int)r.u32(),"entry interface");
         int nparams=r.u16();
         // Regions own execution metadata; their immutable pools and registry are shared.
