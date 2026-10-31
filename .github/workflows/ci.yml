@@ -50,6 +50,12 @@ jobs:
           java-version: '21'
           distribution: graalvm-community
       - uses: sbt/setup-sbt@ecad189dd245444b9ae0a0cd5922fd938b88906f
+      - name: MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Linux native prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y zlib1g-dev
       - name: Install compiler from npm
         env:
           INPUT_COMPILER_VERSION: ${{ inputs.compiler_version }}
