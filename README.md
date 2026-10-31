@@ -20,7 +20,7 @@ or newer can reproduce these pinned sources. The SDK refuses v5 bytecode.
    `Money` is signed int64 cents. Read the [portable contract](sample-suite/CONTRACT.md).
 2. **Declare the API.** [host.schema.json](sample-suite/host.schema.json) lists the contexts,
    object types, `Currency`, overloads, void methods and two SAM interfaces (`Adjuster`, `(Money) -> void`;
-   `Score`, `(Money) -> int`) under `interfaces`. [sample.dsl.json](sample-suite/sample.dsl.json)
+   `Score`, `(Money) -> int`) under `interfaces`. [`sample.dsl.json`](sample-suite/sample.dsl.json)
    merges that domain with the standard catalog. The host loads the schema from the classpath
    (`build.sbt` copies the file), so the bytes are exactly the corpus bytes.
 3. **Pin dependencies.** [sdk.lock](sdk.lock) and [suite.lock](suite.lock) hash every vendored file;

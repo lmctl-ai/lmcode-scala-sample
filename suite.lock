@@ -3,7 +3,7 @@
   "commit": "a21439a4ebb35599a3a9ffc95a13cf05b9059f2e",
   "sha256": {
     "CONTRACT.md": "1f5b27defb64ad497c1b68c5cc0219cd73865dde4acc54f0a7f23d68111a5139",
-    "README.md": "1d3082cc7872504b1d5773f818aa4252decd970ec6f8f7651e7385c1d5994202",
+    "README.md": "8072a5515b20a54e54655acd6eff2cebb68cf44338dddd55fe12795bced4ab35",
     "audit.lms": "aa75d1c6b5941c3a55fb5791026a9bde1bdaec8c6b8cacfc5cd76e88d1a14f0f",
     "audit.py": "d7dae6407086f3eb2b4d5e54cc22d0ff9c4048585cd01b79a78a4a0d64055d00",
     "bytecode/001-literals.dslb": "f5d045ae31b99e89e4b567c36d92bd4fe4bde97f2a606db3465b3e7650d6bc55",
