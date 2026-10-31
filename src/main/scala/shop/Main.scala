@@ -1,8 +1,9 @@
 package shop
 
-import io.lmctl.lmcode.{Context, Formatting, Program, Registry, Reports, ResultSink, Value, VmException}
+import io.lmctl.lmcode.{Context, Formatting, InvocationResults, Program, Registry, Reports, ResultContract, ResultSink, Value, VmException}
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.{Files, Path}
+import scala.jdk.CollectionConverters.*
 
 /** The native host protocol. Compilation belongs to lmscript; this program only executes bytecode.
   *
@@ -15,7 +16,8 @@ object Main:
     try "lmcode-scala-sample " + String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim
     finally in.close()
   }
-  private val Usage = "usage: --version | --lmcode-schema [--json] | --lmcode-signatures | --lmcode FILE"
+  private val Usage = "usage: --version | --lmcode-schema [--json] | --lmcode-signatures | --lmcode FILE | [--lmcode|--first|--last] FILE ..."
+  private def usage(): Int = Reports.failureFrame("cli", VmException("CLI_USAGE", Usage))
 
   def main(args: Array[String]): Unit =
     val status = run(args.toList)
@@ -25,68 +27,69 @@ object Main:
   /** Dispatch on the exact argument shape; anything else is a usage error. */
   def run(args: List[String]): Int =
     args match
-      case List("--version") =>
-        Protocol.line(Version)
-        0
-      case List("--lmcode-schema") | List("--lmcode-schema", "--json") =>
-        Protocol.emit(Shop.schemaBytes)
-        0
-      case List("--lmcode-signatures") =>
-        Host().registry.signatures.forEach(signature => Protocol.line(signature))
-        0
-      case List("--lmcode", file) => runProgram(file)
-      case _ =>
-        Protocol.failure("cli", "CLI_USAGE", Usage.getBytes(UTF_8))
-        2
+      case List("--version") => Protocol.line(Version); 0
+      case List("--lmcode-schema") | List("--lmcode-schema", "--json") => Protocol.emit(Shop.schemaBytes); 0
+      case List("--lmcode-signatures") => Host().registry.signatures().forEach(Protocol.line); 0
+      case _ => runPrograms(args)
 
-  private def runProgram(file: String): Int =
-    val bytecode = try readBytecode(file) catch case _: AppFailure => return appFailure("cannot read sample input")
+  private def runPrograms(args: List[String]): Int =
+    if args.isEmpty || args.size % 2 != 0 then return usage()
+    val pairs = args.grouped(2).toList
+    if pairs.exists(p => !Set("--lmcode", "--first", "--last").contains(p.head)) then return usage()
+    val files = pairs.map(_(1)).asJava
+    val priorities = pairs.map(p => if p.head == "--first" then 0 else if p.head == "--last" then 2 else 1)
     val host = Host()
-    val program =
-      try Program.load(bytecode, Shop.schemaBytes, host.registry)
-      catch
-        case error: VmException => return loadFailure(error)
-        case _: RuntimeException => return appFailure("cannot read sample input")
-    runLoaded(program, host)
-
-  /** Run one loaded program. Its trace lines were already written by `print`; the terminal frame follows the diagnostic result line. */
-  private def runLoaded(program: Program, host: Host): Int =
-    // The invocation sink survives the body and selected rule-entry arena resets.
-    val sink = ResultSink()
-    host.registry.setResultSink(sink)
-    val context = host.context
-    try program.run(context, host.registry)
-    catch
-      case error: VmException =>
-        Protocol.vmFailure("run", error, error.getMessage.getBytes(UTF_8))
-        return 3
-    // Rule entries (DSLB v6): after the body, @item entries run once per shop
-    // item in order, @total once with the shop total, other annotations never.
-    var entriesCalled = 0
-    val entries = program.entries()
     try
-      for i <- 0 until entries.size() do
-        entries.get(i).annotation() match
-          case "item" =>
-            for item <- host.itemHandles do
-              callEntry(program, i, context, host.registry, Bind.handle("Money", item))
-              entriesCalled += 1
-          case "total" =>
-            callEntry(program, i, context, host.registry, host.totalHandle)
-            entriesCalled += 1
-          case _ => ()
+      val results = InvocationResults.fromCommand(files)
+      val schema = Shop.schemaBytes
+      val contract = ResultContract.fromSchema(schema)
+      val context = host.context
+      var entriesCalled = 0
+      var failed = false
+      val order = pairs.indices.sortBy(priorities)
+      for position <- order do
+        val part = results.registrations().get(position)
+        var phase = "load"
+        try
+          val program =
+            try Program.load(readBytecode(part.file()), schema, host.registry)
+            catch
+              case error: VmException =>
+                val message = error.code match
+                  case "LOAD_SCHEMA_MISMATCH" => "sample schema mismatch"
+                  case "LOAD_UNBOUND" => "sample import mismatch"
+                  case _ => "invalid sample bytecode"
+                throw VmException(error.code, message)
+          results.select(part.index(), host.registry, contract)
+          phase = "run"
+          program.run(context, host.registry)
+          for i <- 0 until program.entries().size() do
+            program.entries().get(i).annotation() match
+              case "item" =>
+                for item <- host.itemHandles do
+                  callEntry(program, i, context, host.registry, Bind.handle("Money", item))
+                  entriesCalled += 1
+              case "total" =>
+                callEntry(program, i, context, host.registry, host.totalHandle)
+                entriesCalled += 1
+              case _ => ()
+          results.complete(part.index())
+        catch
+          case error: VmException => results.fail(part.index(), phase, error); failed = true
+          case _: Exception => results.fail(part.index(), "app", VmException("APP_FAIL", "cannot read sample input")); failed = true
+      if !failed && host.ledger.balance < 0 then
+        results.fail(null, "app", VmException("APP_FAIL", "ledger: negative balance"))
+        failed = true
+      if !failed then
+        val summary = java.io.ByteArrayOutputStream()
+        summary.writeBytes(s"{\"host_summary\":{\"balance\": ${host.ledger.balance}, \"entries\": ${host.ledger.entries}, \"note\": ".getBytes(UTF_8))
+        summary.writeBytes(Protocol.jsonString(host.ledger.note.bytes))
+        summary.writeBytes(s", \"entries_called\": $entriesCalled}}\n".getBytes(UTF_8))
+        Protocol.emit(summary.toByteArray)
+      results.writeFrame(System.out)
     catch
-      case error: VmException =>
-        Protocol.vmFailure("run", error, error.getMessage.getBytes(UTF_8))
-        return 3
-    // A negative balance is an application rule, checked only after the VM succeeded.
-    if host.ledger.balance < 0 then return appFailure("ledger: negative balance")
-    val note = Protocol.jsonString(host.ledger.note.bytes)
-    val result = s"{\"balance\": ${host.ledger.balance}, \"entries\": ${host.ledger.entries}, \"note\": "
-    Protocol.ok(concat(result.getBytes(UTF_8), note, s", \"entries_called\": $entriesCalled}".getBytes(UTF_8)))
-    try Reports.writeResultFrame(System.out, sink)
-    catch case _: java.io.IOException => return appFailure("cannot write result frame")
-    0
+      case error: VmException => Reports.failureFrame("cli", error)
+      case _: Exception => Reports.failureFrame("app", VmException("APP_FAIL", "cannot read sample input"))
 
   /** Call rule entry `index` with one argument; a non-void result prints `entry NAME = VALUE`. */
   private def callEntry(program: Program, index: Int, context: Context, registry: Registry, argument: Value): Unit =
@@ -108,25 +111,9 @@ object Main:
       case Value.Kind.STR   => value.asString.bytes
       case _                => Array.emptyByteArray
 
-  /** Loader wording is normalized so every port reports the same portable message. */
-  private def loadFailure(error: VmException): Int =
-    val message = error.code match
-      case "LOAD_SCHEMA_MISMATCH" => "sample schema mismatch"
-      case "LOAD_UNBOUND"         => "sample import mismatch"
-      case _                      => "invalid sample bytecode"
-    Protocol.failure("load", error.code, message.getBytes(UTF_8))
-    3
-
-  private def appFailure(message: String): Int =
-    Protocol.failure("app", "APP_FAIL", message.getBytes(UTF_8))
-    4
-
-  /** Thrown only for I/O; reported as an application failure (exit 4), never a VM error. */
-  private final class AppFailure extends RuntimeException
-
   private def readBytecode(file: String): Array[Byte] =
     try Files.readAllBytes(Path.of(file))
-    catch case _: Exception => throw AppFailure()
+    catch case _: Exception => throw IllegalArgumentException("cannot read sample input")
 
   private def concat(parts: Array[Byte]*): Array[Byte] =
     val out = java.io.ByteArrayOutputStream()

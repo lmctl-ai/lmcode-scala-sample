@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+set -eu
+root="$(cd "$(dirname "$0")/.." && pwd)"
+classpath="$(cat "$root/target/runtime-classpath.txt")"
+exec java -cp "$classpath" shop.Main "$@"

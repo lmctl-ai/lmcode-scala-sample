@@ -141,7 +141,7 @@ final class ResultJson {
     if(type.startsWith("Float")&&item instanceof Double d)return number(d,path);
     throw invalid(path,"handle");
   }
-  private static Object copyNode(StdJson.Node node,String path,Set<Object> active){
+  static Object copyNode(StdJson.Node node,String path,Set<Object> active){
     if(node==null||node.kind==null)throw invalid(path,"handle");
     if(!active.add(node))throw invalid(path,"cycle");
     try {
@@ -170,6 +170,34 @@ final class ResultJson {
       };
     }finally{active.remove(node);}
   }
+  // Choose the closest shortest round-trip decimal, including one-digit subnormals.
+  // Construct from the exact binary value: Double.toString on older JVMs can
+  // retain extra digits (4.9E-324) and uses a different exponent layout.
+  static String canonicalNumber(double value){
+    if(value==0)return "0";
+    java.math.BigDecimal exact=new java.math.BigDecimal(value), rounded=exact;
+    for(int precision=1;precision<=17;precision++){
+      java.math.BigDecimal nearest=exact.round(new java.math.MathContext(precision,java.math.RoundingMode.HALF_EVEN));
+      java.math.BigDecimal best=null;
+      // At a rounding-interval boundary the nearest decimal can fail to round
+      // back while its immediate neighbor is the shortest valid representation.
+      for(int offset=-1;offset<=1;offset++){
+        java.math.BigDecimal candidate=nearest.add(nearest.ulp().multiply(java.math.BigDecimal.valueOf(offset)));
+        if(candidate.doubleValue()!=value)continue;
+        int distance=best==null?-1:candidate.subtract(exact).abs().compareTo(best.subtract(exact).abs());
+        if(distance<0 || distance==0&&!candidate.unscaledValue().testBit(0))best=candidate;
+      }
+      if(best!=null){rounded=best;break;}
+    }
+    rounded=rounded.stripTrailingZeros();
+    String digits=rounded.unscaledValue().abs().toString(),sign=value<0?"-":"";
+    int exponent=digits.length()-rounded.scale()-1;
+    if(exponent < -4 || exponent >= 6){
+      String fraction=digits.length()>1?"."+digits.substring(1):"";
+      return sign+digits.charAt(0)+fraction+"e"+(exponent<0?"-":"+")+String.format(java.util.Locale.ROOT,"%02d",Math.abs(exponent));
+    }
+    return rounded.toPlainString();
+  }
   static String encode(Object value){StringBuilder out=new StringBuilder();emit(value,out);return out.toString();}
   private static void emit(Object value,StringBuilder out){
     if(value==null){out.append("null");return;}
@@ -178,10 +206,7 @@ final class ResultJson {
     if(value instanceof Double number){
       double v=number;
       if(v==0){out.append('0');return;}
-      // Consensus formatter: Java Double.toString, NEVER Formatting.formatG15.
-      String text=Double.toString(v);
-      if(text.endsWith(".0"))text=text.substring(0,text.length()-2);
-      out.append(text);return;
+      out.append(canonicalNumber(v));return;
     }
     if(value instanceof List<?> list){out.append('[');boolean first=true;for(Object item:list){if(!first)out.append(',');first=false;emit(item,out);}out.append(']');return;}
     if(value instanceof Map<?,?> map){out.append('{');boolean first=true;for(var entry:map.entrySet()){if(!first)out.append(',');first=false;out.append(Reports.escape((String)entry.getKey())).append(':');emit(entry.getValue(),out);}out.append('}');return;}

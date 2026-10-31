@@ -10,32 +10,25 @@ python = "python3";
 if (env("RUNNER_OS") == "Windows") { python = "python"; }
 step([python, "-B", "scripts/sync.py", "check"]);
 step(["bash", "scripts/build-jvm.sh"]);
+step([python, "scripts/check-invocations.py", path_join(Directory, "bin/lmcode-scala-sample")]);
+step([python, "scripts/test-invocation-mutations.py"]);
 jvm = ["java", "-cp", trim(read_file("target/runtime-classpath.txt")), "shop.Main"];
 step(concat(compiler_command(), ["--no-preflight", "sample-suite/audit.lms", "--std", "vendor/lmcode-java/std/lmcode-std.schema.json"]));
 step(concat(compiler_command(), ["--no-preflight", "sample-suite/run-suite.lms"], jvm));
 step(concat(compiler_command(), ["--no-preflight", "sample-suite/check-recompile.lms"]));
 step(concat(compiler_command(), ["--no-preflight", "sample-suite/test-runner.lms"]));
-step(concat(compiler_command(), ["--no-preflight", "examples/rule-entries.lms", path_join(Directory, "build/rule-entries.dslb")]));
-expected = binary(root, {op:"hex", path:path_join(root, "expected/068-rule-entries.out")});
-fn example(command, expected) {
-  r = invoke(suite_root(), command, ["--lmcode", path_join(Directory, "build/rule-entries.dslb")], {}, 30000);
-  assert(r.code == 0 && r.hex == expected && r.stderr_hex == "", "annotated interface example differs");
-}
-example(jvm, expected);
+rule_example = invoke(suite_root(), concat(compiler_command(), ["--no-preflight", "examples/rule-entries.lms", path_join(Directory, "bin/lmcode-scala-sample")]), [], {}, 30000);
+assert(rule_example.code == 0 && rule_example.stdout == "body done\nitem rule 125\nitem rule 250\nitem rule 375\naudit 125\naudit 250\naudit 375\ntotal rule 750\n{\"host_summary\":{\"balance\": 0, \"entries\": 0, \"note\": \"\", \"entries_called\": 7}}\n" && rule_example.stderr_hex == "", "annotated interface example differs");
 if (env("RUN_NATIVE") == "1") {
   step(["bash", "scripts/build-native.sh"]);
   executable = path_join(Directory, "build/lmcode-scala-sample");
   if (env("RUNNER_OS") == "Windows") { executable = executable + ".exe"; }
   step(concat(compiler_command(), ["--no-preflight", "sample-suite/run-suite.lms", executable]));
-  example([executable], expected);
   println("PASS GraalVM native executable");
 }
 println("PASS annotated interface example");
 
-# Small standalone text-template example, in addition to the shared corpus.
-mkdir("build");
-template_bytecode = path_join(Directory,"build/text-template.dslb");
-step(concat(compiler_command(),["--no-preflight","examples/text-template.lms",template_bytecode]));
-template_result = invoke(root,jvm,["--lmcode",template_bytecode],{},30000);
-assert(template_result.code == 0 && template_result.stderr_hex == "" && template_result.stdout == "Hello, Sam!\nItems: 0: apple, 1: pear\n{\"ok\": true, \"result\": {\"balance\": 0, \"entries\": 0, \"note\": \"\", \"entries_called\": 0}}\nLMCODE_RETURN_BEGIN\nnull\nLMCODE_RETURN_END\n","text template example differs");
+# The reusable text-template program runs through the public API and the selected host.
+template_result = invoke(suite_root(), concat(compiler_command(), ["--no-preflight", "examples/text-template.lms", path_join(Directory, "bin/lmcode-scala-sample")]), [], {}, 30000);
+assert(template_result.code == 0 && template_result.stderr_hex == "" && template_result.stdout == "Hello, Sam!\nItems: 0: apple, 1: pear\n{\"host_summary\":{\"balance\": 0, \"entries\": 0, \"note\": \"\", \"entries_called\": 0}}\n", "text template example differs");
 println("PASS text template example");

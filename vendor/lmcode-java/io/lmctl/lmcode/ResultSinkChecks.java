@@ -15,6 +15,8 @@ public final class ResultSinkChecks {
  static void refuses(Runnable run,String message){try{run.run();}catch(VmException e){equal(e.code,"RUN_HOST","conversion code");equal(e.getMessage(),message,"conversion diagnostic");return;}throw new AssertionError("expected refusal: "+message);}
  static Value parsed(Registry r,Context c,String source){return call(r,c,"fn json_parse(string) -> Json",Value.ofString(source));}
  static void group(String name,Runnable run,String filter){if(!name.contains(filter))return;run.run();System.out.println("PASS "+name);}
+ static byte[] frame(ResultSink sink){ByteArrayOutputStream out=new ByteArrayOutputStream();writeFrame(out,sink);return out.toByteArray();}
+ static void writeFrame(java.io.OutputStream out,ResultSink sink){InvocationResults r=InvocationResults.fromCommand(List.of("fixture"),null);r.select(0,new Registry(),new ResultContract()).set(Value.object("Json",InvocationJson.parse(InvocationJson.utf8(sink.json()))));r.complete(0);if(r.writeFrame(out)!=0)throw new AssertionError("frame write failed");}
  public static void main(String[] args){run(args.length==0?"":args[0]);}
  public static void run(String filter){
   group("registration and missing sink",()->{
@@ -23,7 +25,7 @@ public final class ResultSinkChecks {
    equal(new Registry(false).stdSignatures().size(),0,"explicit empty registry");
   },filter);
   group("null framing and replacement order",()->{
-   ResultSink s=new ResultSink();equal(new String(Reports.resultFrame(s),java.nio.charset.StandardCharsets.UTF_8),"LMCODE_RETURN_BEGIN\nnull\nLMCODE_RETURN_END\n","mandatory null frame");
+   ResultSink s=new ResultSink();equal(new String(frame(s),java.nio.charset.StandardCharsets.UTF_8),"LMCODE_RETURN_BEGIN\n{\"ok\":true,\"result\":null}\nLMCODE_RETURN_END\n","mandatory null frame");
    s.put("a",Value.ofInt(1));s.put("b",Value.ofBool(false));s.put("a",Value.ofString("last"));s.putNull("nil");
    equal(s.json(),"{\"a\":\"last\",\"b\":false,\"nil\":null}","ordered overwrite");s.setNull();s.put("",Value.ofInt(2));equal(s.json(),"{\"\":2}","empty key");s.reset();equal(s.json(),"null","new invocation reset");
   },filter);
@@ -69,7 +71,7 @@ public final class ResultSinkChecks {
   },filter);
   group("shortest float and zero",()->{
    ResultSink s=new ResultSink();s.set(Value.ofFloat(.1+.2));
-   equal(new String(Reports.resultFrame(s),java.nio.charset.StandardCharsets.UTF_8),"LMCODE_RETURN_BEGIN\n0.30000000000000004\nLMCODE_RETURN_END\n","shortest float frame, not str(float)");
+   equal(new String(frame(s),java.nio.charset.StandardCharsets.UTF_8),"LMCODE_RETURN_BEGIN\n{\"ok\":true,\"result\":0.30000000000000004}\nLMCODE_RETURN_END\n","shortest float frame, not str(float)");
    s.set(Value.ofFloat(.1));equal(s.json(),"0.1","shortest 0.1, not 17-digit expansion");
    s.set(Value.ofFloat(-0.0));equal(s.json(),"0","negative zero");s.set(Value.ofFloat(Double.MIN_VALUE));equal(Double.parseDouble(s.json()),Double.MIN_VALUE,"subnormal round trip");
    for(double value:new double[]{Double.NaN,Double.POSITIVE_INFINITY,Double.NEGATIVE_INFINITY})refuses(()->s.set(Value.ofFloat(value)),"lmcode return: invalid JSON value at : nonfinite");
@@ -113,29 +115,15 @@ public final class ResultSinkChecks {
     System.setOut(new java.io.PrintStream(out,true,java.nio.charset.StandardCharsets.UTF_8));
     System.setErr(new java.io.PrintStream(err,true,java.nio.charset.StandardCharsets.UTF_8));
     call(registry,context,"fn lmcode_return_set(string) -> void",Value.ofString(marker));
-    equal(new String(Reports.resultFrame(sink),java.nio.charset.StandardCharsets.UTF_8).split("\n",-1).length,4,"escaped marker changed frame line count");
+    equal(new String(frame(sink),java.nio.charset.StandardCharsets.UTF_8).split("\n",-1).length,4,"escaped marker changed frame line count");
     call(registry,context,"fn lmcode_return_null() -> void");
     call(registry,context,"fn lmcode_return_put(string, bool) -> void",Value.ofString("b"),Value.ofBool(true));
     call(registry,context,"fn lmcode_return_put_null(string) -> void",Value.ofString("n"));
    }finally{System.setOut(oldOut);System.setErr(oldErr);}
    equal(out.size(),0,"native library printed stdout");equal(err.size(),0,"native library printed stderr");
   },filter);
-  group("deferred stream failure",()->{
-   boolean[] closed={false};
-   java.io.OutputStream output=new java.io.OutputStream(){
-    public void write(int value){}
-    public void flush()throws java.io.IOException{throw new java.io.IOException("deferred frame failure");}
-    public void close(){closed[0]=true;}
-   };
-   try{Reports.writeResultFrame(output,new ResultSink());throw new AssertionError("frame writer swallowed deferred stream failure");}
-   catch(java.io.IOException expected){equal(expected.getMessage(),"deferred frame failure","stream error preserved");}
-   equal(closed[0],false,"frame helper closed caller stream");
-  },filter);
-  group("PrintStream write failure",()->{
-   java.io.PrintStream output=new java.io.PrintStream(new java.io.OutputStream(){public void write(int value)throws java.io.IOException{throw new java.io.IOException("broken stream");}},true,java.nio.charset.StandardCharsets.UTF_8);
-   try{Reports.writeResultFrame(output,new ResultSink());throw new AssertionError("frame writer ignored PrintStream error");}
-   catch(java.io.IOException expected){equal(expected.getMessage(),"lmcode return: cannot write result frame","PrintStream error surfaced");}
-  },filter);
+  group("deferred stream failure",()->InvocationChecks.run("flush and single shot"),filter);
+  group("PrintStream write failure",()->InvocationChecks.run("flush and single shot"),filter);
   group("concurrent invocations and LF output",()->{
    ExecutorService pool=Executors.newFixedThreadPool(2);CountDownLatch ready=new CountDownLatch(2),go=new CountDownLatch(1);
    try{
@@ -143,8 +131,8 @@ public final class ResultSinkChecks {
     for(String value:List.of("a","b"))futures.add(pool.submit(()->{Registry r=new Registry();Context c=new Context();ResultSink s=new ResultSink();r.setResultSink(s);r.enterRun(c);try{ready.countDown();go.await();call(r,c,"fn lmcode_return_set(string) -> void",Value.ofString(value));}finally{r.exitRun(c);}return s.json();}));
     if(!ready.await(10,TimeUnit.SECONDS))throw new AssertionError("concurrent invocation did not enter");go.countDown();
     equal(futures.get(0).get(10,TimeUnit.SECONDS),"\"a\"","first sink isolation");equal(futures.get(1).get(10,TimeUnit.SECONDS),"\"b\"","second sink isolation");
-    ResultSink s=new ResultSink();ByteArrayOutputStream out=new ByteArrayOutputStream();Reports.writeResultFrame(out,s);
-    equal(out.toString(java.nio.charset.StandardCharsets.UTF_8),"LMCODE_RETURN_BEGIN\nnull\nLMCODE_RETURN_END\n","LF output stream");
+    ResultSink s=new ResultSink();ByteArrayOutputStream out=new ByteArrayOutputStream();writeFrame(out,s);
+    equal(out.toString(java.nio.charset.StandardCharsets.UTF_8),"LMCODE_RETURN_BEGIN\n{\"ok\":true,\"result\":null}\nLMCODE_RETURN_END\n","LF output stream");
    }catch(Exception error){throw new AssertionError(error);}finally{go.countDown();pool.shutdownNow();}
   },filter);
  }

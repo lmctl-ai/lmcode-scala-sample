@@ -37,9 +37,7 @@ or newer can reproduce these pinned sources. The SDK refuses v5 bytecode.
 7. **Include standard and testing functions deliberately.** `new Registry()` installs the string, math,
    collection and file catalogs; `Stdlib.registerTesting` adds `print` and `assert_close` (an explicit opt-in).
    The [coverage audit](sample-suite/audit.lms) checks all 182 standard signatures are imported by the corpus.
-8. **Compile, never interpret source in the host.** The corpus wrappers use `_lmcode_`/`savedsl`; the
-   `.dslb` bytecode is committed. The host loads it with `Program.load(bytes, schema, registry)`, and
-   [`check-bytecode.py`](scripts/check-bytecode.py) recompiles to prove the pinned bytes reproduce.
+8. **Construct, then execute programs.** Reusable source constructs an opaque program with `_lmcode_` and executes it with `run_lmcode`. The host accepts repeated `--lmcode FILE` pairs in one process; the low-level `Program.load(bytes, schema, registry)` API remains available for corpus fixtures and validates imports and schema bytes.
 9. **Handle errors at the right boundary.** [Main.scala](src/main/scala/shop/Main.scala) prints one JSON
    result after the program's trace lines: success 0, usage 2, load or run error 3, application failure 4.
    A `VmException` keeps its SDK `code`, line and column; loader wording is normalized. After the body runs,
@@ -168,7 +166,7 @@ lmscript install github:lmctl-ai/lmcode-scala-sample@latest
 
 ## Text templates
 
-[examples/text-template.lms](examples/text-template.lms) renders ordinary text from a nested context with indexed lists, loops and boolean conditions. The standard `template_render(string, Json) -> string` function performs one pass; inserted values stay literal. Compile it with `lmscript --no-preflight examples/text-template.lms build/text-template.dslb`, then run the sample host with `--lmcode build/text-template.dslb`.
+[examples/text-template.lms](examples/text-template.lms) renders ordinary text from a nested context with indexed lists, loops and boolean conditions. It constructs an lmcode program, calls `run_lmcode`, and checks `result.ok`; no bytecode file is exposed to the script author.
 
 The lmscript-driven suite runs 108 cases, including template success/error cases. See the [portable template contract](https://github.com/lmctl-ai/lmcode-cpp/blob/main/std/template.md).
 
@@ -176,6 +174,8 @@ The lmscript-driven suite runs 108 cases, including template success/error cases
 
 The documentation calls the language lmcode. `--lmcode`, `--lmcode-schema` and `--lmcode-signatures` are current host flag literals; `DSLB` is the bytecode magic and `DSLB v6` is the current format name; `.dslb` is the current bytecode filename extension. Other code-formatted API names, paths, manifest names and diagnostic text retain their current literal spellings.
 
-## Invocation result
+## Multi-program invocations
 
-One SDK `ResultSink` spans the body and selected rule entries. After successful application validation the host emits its terminal frame; unset results produce `null`, and failures emit no frame. The canonical suite has 123 cases. Set `LMSCRIPT_BIN` to a mono-main compiler with the renamed host flags and `out=` support; older published compilers lack this contract.
+[sample-suite/invocations.lms](sample-suite/invocations.lms) constructs reusable programs, adds them with `lmcode_build`, and runs the builder once per host invocation. Repeated `--lmcode FILE` pairs and role fragments such as `--first FILE` and `--last FILE` select programs in one process. Programs share the host ledger and context; returned values stay in add order inside one aggregate result. The host prints a tagged `host_summary` diagnostic and exactly one terminal return frame per `run_lmcode` call. The sample gate runs the byte/exit corpus, reusable program flow, and failing adapter mutants.
+
+The canonical suite has 123 cases. Use an `LMSCRIPT_BIN` built from mono main for the builder API and renamed host flags; older published compilers do not support this contract.

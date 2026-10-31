@@ -68,6 +68,14 @@ def main():
             shutil.rmtree(staging)
         staging.mkdir(parents=True)
         copy_tree(source / 'src/main/java', staging)
+        # Scala 3 reserves `sealed` in its mixed-source parser; preserve behavior while
+        # adapting the Java SDK's accessor/field spelling for this host build.
+        for name in ('ResultSink.java', 'InvocationResults.java'):
+            path = staging / 'io/lmctl/lmcode' / name
+            if path.exists():
+                text = path.read_text(encoding='utf-8')
+                text = text.replace('sealed()', 'isSealed()').replace(' sealed;', ' isSealed;').replace('=sealed;', '=isSealed;').replace('sealed=true', 'isSealed=true').replace('sealed)throw', 'isSealed)throw')
+                path.write_text(text, encoding='utf-8', newline='\n')
         (staging / 'std').mkdir()
         shutil.copy2(source / 'std/lmcode-std.schema.json', staging / 'std/lmcode-std.schema.json')
         shutil.copy2(source / 'LICENSE', staging / 'LICENSE')

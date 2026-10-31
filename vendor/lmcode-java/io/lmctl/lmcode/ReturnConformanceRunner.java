@@ -11,31 +11,24 @@ public final class ReturnConformanceRunner {
  private ReturnConformanceRunner(){}
  public record Result(int exit,byte[] stdout,byte[] stderr){}
  static Result execute(Path binary,Path schema,int repeat,boolean reset,boolean early,boolean rounding,boolean appFail){
-  ByteArrayOutputStream output=new ByteArrayOutputStream();
+  ByteArrayOutputStream output=new ByteArrayOutputStream();InvocationResults results=InvocationResults.fromCommand(List.of(binary.toString()),null);
+  Registry registry=new Registry();ResultSink sink=results.select(0,registry,ResultContract.fromSchema(read(schema)));String phase="load";
   try{
-   Registry registry=new Registry();ResultSink sink=new ResultSink();registry.setResultSink(sink);
    registry.function("entry_fail",List.of(),"void",(c,s,a)->{throw VmException.host("entry failure");});
-   registry.function("expect_result",List.of("string"),"void",(c,s,a)->{
-    if(!sink.json().equals(a[0].asString().toString()))throw VmException.host("return overload payload mismatch");return Value.none();
-   });
-   Program program=Program.load(Files.readAllBytes(binary),Files.readAllBytes(schema),registry);Context context=new Context();
-   sink.reset();program.run(context,registry);
-   if(early)Reports.writeResultFrame(output,sink); // fault host: emits before selected entries can fail
+   registry.function("expect_result",List.of("string"),"void",(c,s,a)->{if(!sink.json().equals(a[0].asString().toString()))throw VmException.host("return overload payload mismatch");return Value.none();});
+   Program program=Program.load(read(binary),read(schema),registry);Context context=new Context();phase="run";program.run(context,registry);
+   if(early)output.writeBytes(Reports.framed("{\"ok\":true,\"result\":"+sink.json()+"}")); // deliberate host fault
    for(int n=0;n<repeat;n++)for(int i=0;i<program.entries().size();i++){
-    if(reset)sink.reset(); // fault host: erases body/prior entry writes
-    Value value=program.call(i,context,registry,List.of());
-    if(value.kind!=Value.Kind.INT||value.asInt()!=7)throw VmException.host("entry HALT result changed");
+    if(reset)sink.reset(); // deliberate host fault
+    Value value=program.call(i,context,registry,List.of());if(value.kind!=Value.Kind.INT||value.asInt()!=7)throw VmException.host("entry HALT result changed");
    }
-   if(appFail)return new Result(4,output.toByteArray(),new byte[0]);
-   if(rounding){
-    String bad=Formatting.formatG15(Double.parseDouble(sink.json()));
-    output.writeBytes(("LMCODE_RETURN_BEGIN\n"+bad+"\nLMCODE_RETURN_END\n").getBytes(StandardCharsets.UTF_8));
-   }else Reports.writeResultFrame(output,sink);
-   return new Result(0,output.toByteArray(),new byte[0]);
-  }catch(VmException|IOException error){
-   return new Result(3,output.toByteArray(),(error.getMessage()+"\n").getBytes(StandardCharsets.UTF_8));
-  }
+   results.complete(0);
+   if(appFail)results.fail(null,"app",new VmException("APP_FAIL","application validation failed"));
+   if(rounding){String bad=Formatting.formatG15(Double.parseDouble(sink.json()));output.writeBytes(Reports.framed("{\"ok\":true,\"result\":"+bad+"}"));return new Result(0,output.toByteArray(),new byte[0]);}
+  }catch(VmException error){results.fail(0,phase,error);int code=results.writeFrame(output);return new Result(code,output.toByteArray(),(error.getMessage()+"\n").getBytes(StandardCharsets.UTF_8));}
+  int code=results.writeFrame(output);return new Result(code,output.toByteArray(),new byte[0]);
  }
+ private static byte[] read(Path path){try{return Files.readAllBytes(path);}catch(IOException e){throw new VmException("LOAD_BAD_BYTECODE","cannot read fixture");}}
  public static int run(Path directory)throws Exception{
   // Canonical hashes bind bytes and expectations; never regenerate expected output here.
   for(String line:Files.readAllLines(directory.resolve("vectors.lock"))){
@@ -61,7 +54,7 @@ public final class ReturnConformanceRunner {
   control(directory,"entry-sink",execute(directory.resolve("entry-sink.dslb"),schema,1,true,false,false,false),0);
   control(directory,"entry-error",execute(directory.resolve("entry-error.dslb"),schema,1,false,true,false,false),3);
   Result app=execute(directory.resolve("float-roundtrip.dslb"),schema,1,false,false,false,true);
-  if(app.exit()!=4||app.stdout().length!=0)throw new AssertionError("application failure emitted a frame");
+  if(app.exit()!=4||!new String(app.stdout(),StandardCharsets.UTF_8).equals("LMCODE_RETURN_BEGIN\n{\"ok\":false,\"phase\":\"app\",\"code\":\"APP_FAIL\",\"message\":\"application validation failed\"}\nLMCODE_RETURN_END\n"))throw new AssertionError("application failure envelope differs");
   return 0;
  }
  private static void control(Path directory,String name,Result mutated,int code)throws IOException{
@@ -81,7 +74,7 @@ public final class ReturnConformanceRunner {
   }
   Result result=execute(Path.of(args[0]),Path.of(args[1]),repeat,reset,early,rounding,app);
   System.out.write(result.stdout());System.err.write(result.stderr());System.out.flush();System.err.flush();
-  if(System.out.checkError()||System.err.checkError())System.exit(3);
+  if(System.out.checkError()||System.err.checkError())System.exit(4);
   if(result.exit()!=0)System.exit(result.exit());
  }
 }
