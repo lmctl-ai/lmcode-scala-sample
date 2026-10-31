@@ -3,6 +3,11 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 public final class Reports {
  private Reports(){}
+ /** Pure terminal frame. Hosts call only after body, entries and app validation succeed. */
+ public static byte[] resultFrame(ResultSink sink){return ("LMCODE_RETURN_BEGIN\n"+sink.json()+"\nLMCODE_RETURN_END\n").getBytes(StandardCharsets.UTF_8);}
+ /** Writes and flushes LF bytes without closing; surfaces buffered and PrintStream errors. */
+ public static void writeResultFrame(java.io.OutputStream output,ResultSink sink)throws java.io.IOException {output.write(resultFrame(sink));output.flush();if(output instanceof java.io.PrintStream stream && stream.checkError())throw new java.io.IOException("lmcode return: cannot write result frame");}
+
  private static void printlnLf(String line){byte[] b=(line+"\n").getBytes(StandardCharsets.UTF_8);System.out.write(b,0,b.length);System.out.flush();}
  public static byte[] escapeBytes(VmString s){return escapeBytes(s.bytes());}
  public static byte[] escapeBytes(byte[] raw){ByteArrayOutputStream b=new ByteArrayOutputStream(raw.length+2);b.write('"');for(byte v:raw){int c=v&255;switch(c){case '"'->{b.write('\\');b.write('"');}case '\\'->{b.write('\\');b.write('\\');}case '\n'->{b.write('\\');b.write('n');}case '\r'->{b.write('\\');b.write('r');}case '\t'->{b.write('\\');b.write('t');}default->{if(c<32)b.writeBytes(String.format(java.util.Locale.ROOT,"\\u%04x",c).getBytes(StandardCharsets.US_ASCII));else b.write(c);}}}b.write('"');return b.toByteArray();}

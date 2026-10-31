@@ -1,6 +1,6 @@
 package shop
 
-import io.lmctl.lmcode.{Context, Formatting, Program, Registry, Value, VmException}
+import io.lmctl.lmcode.{Context, Formatting, Program, Registry, Reports, ResultSink, Value, VmException}
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.{Files, Path}
 
@@ -52,6 +52,9 @@ object Main:
   /** Run one loaded program. Its trace lines were already written by `print`; the result line comes last. */
   private def runLoaded(program: Program, host: Host): Int =
     val context = host.context
+    // One sink belongs to this logical invocation; keep it through every entry call.
+    val sink = new ResultSink()
+    host.registry.setResultSink(sink)
     try program.run(context, host.registry)
     catch
       case error: VmException =>
@@ -81,6 +84,7 @@ object Main:
     val note = Protocol.jsonString(host.ledger.note.bytes)
     val result = s"{\"balance\": ${host.ledger.balance}, \"entries\": ${host.ledger.entries}, \"note\": "
     Protocol.ok(concat(result.getBytes(UTF_8), note, s", \"entries_called\": $entriesCalled}".getBytes(UTF_8)))
+    Reports.writeResultFrame(System.out, sink)
     0
 
   /** Call rule entry `index` with one argument; a non-void result prints `entry NAME = VALUE`. */

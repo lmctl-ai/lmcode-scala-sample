@@ -21,6 +21,7 @@ public final class SelfTest {
   public static int runTests() {
     int checks = 0, failures = 0;
     try { checks++; EntryChecks.main(new String[0]); } catch (Throwable e) { failures++; e.printStackTrace(System.err); }
+    try { checks++; ResultSinkChecks.run(""); } catch (Throwable e) { failures++; e.printStackTrace(System.err); }
     try { checks++; strings(); } catch (Throwable e) { failures++; e.printStackTrace(System.err); }
     try { checks++; formatting(); } catch (Throwable e) { failures++; e.printStackTrace(System.err); }
     try { checks++; registry(); } catch (Throwable e) { failures++; e.printStackTrace(System.err); }

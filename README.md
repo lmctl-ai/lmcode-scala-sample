@@ -3,8 +3,8 @@
 **Agent entry point:** a complete Scala 3 host for the shared lmcode shop corpus, not another interpreter.
 Read these three files first: [domain and bindings](src/main/scala/shop/Shop.scala),
 [CLI protocol](src/main/scala/shop/Main.scala), and [byte-exact output](src/main/scala/shop/Protocol.scala).
-The SDK is the Java 21 `io.lmctl.lmcode` package (catalog v3, 182 signatures), vendored unchanged in
-`vendor/lmcode-java/`. `./test.sh` passes all 108 corpus cases byte-for-byte.
+The SDK is the Java 21 `io.lmctl.lmcode` package (catalog v3, 206 mainline signatures), vendored unchanged in
+`vendor/lmcode-java/`. `./test.sh` passes all 123 corpus cases byte-for-byte.
 You need a JDK 21, [sbt](https://www.scala-sbt.org/), Python 3 and a v6-entries-capable `lmscript`.
 
 ```sh
@@ -36,12 +36,12 @@ or newer can reproduce these pinned sources. The SDK refuses v5 bytecode.
    its receiver; `note(string)` returns `Value.none()`.
 7. **Include standard and testing functions deliberately.** `new Registry()` installs the string, math,
    collection and file catalogs; `Stdlib.registerTesting` adds `print` and `assert_close` (an explicit opt-in).
-   The [coverage audit](sample-suite/audit.lms) checks all 182 standard signatures are imported by the corpus.
+   The [coverage audit](sample-suite/audit.lms) checks all 206 standard signatures are imported by the corpus.
 8. **Compile, never interpret source in the host.** The corpus wrappers use `_lmcode_`/`savedsl`; the
    `.dslb` bytecode is committed. The host loads it with `Program.load(bytes, schema, registry)`, and
    [`check-bytecode.py`](scripts/check-bytecode.py) recompiles to prove the pinned bytes reproduce.
-9. **Handle errors at the right boundary.** [Main.scala](src/main/scala/shop/Main.scala) prints one JSON
-   result after the program's trace lines: success 0, usage 2, load or run error 3, application failure 4.
+9. **Handle errors and return frames at the right boundary.** [Main.scala](src/main/scala/shop/Main.scala) prints the JSON
+   diagnostic after the program's trace lines and a terminal return frame after successful dispatch and application validation: success 0, usage 2, load or run error 3, application failure 4.
    A `VmException` keeps its SDK `code`, line and column; loader wording is normalized. After the body runs,
    the host calls the program's rule entries (`Program.entries()` / `Program.call(...)`): each `@item` entry
    once per shop item in order, each `@total` entry once with the shop total, others never; non-void results
@@ -50,6 +50,23 @@ or newer can reproduce these pinned sources. The SDK refuses v5 bytecode.
 10. **Run the shared integration test.** `test.sh` runs [run-suite.sh](sample-suite/run-suite.sh) with the
     command `java -cp <classpath> shop.Main`. Each case gets a fresh `SAMPLE_TMP`; stdout bytes and exit
     codes must match exactly, and stderr must be empty.
+
+## Invocation return frames
+
+`Main` binds one `ResultSink` before `Program.run` and retains it through all
+selected rule entries. The result frame is emitted only after entry dispatch and
+ledger validation succeed; load/run/entry/application failures produce no frame.
+An untouched sink emits JSON `null`. Canonical cases 360–368 and
+[`durable-memory/return-frames.md`](durable-memory/return-frames.md) define the
+payload/frame boundary.
+
+Successful stdout ends with:
+
+```text
+LMCODE_RETURN_BEGIN
+null
+LMCODE_RETURN_END
+```
 
 ## Feature coverage
 
@@ -73,6 +90,7 @@ or newer can reproduce these pinned sources. The SDK refuses v5 bytecode.
 | Native conversion probes: scalars, bytes, hex, handle identity, typed null, wrong-typed handle, copies, `host_sum` | 049–066 (probes) |
 | `@NAME` rule method annotation and `implements` SAM interface | 067 |
 | Rule entries called by the host after the body (`@item`/`@total`, `entries_called`) | 068–069 |
+| Invocation return sink, retained entry writes, JSON frame and no-frame failures | 360–368 |
 | Typed int and float maps (`int_map`, `float_map`) | 101 |
 | Int, float and string containers: stacks, queues, priority queues | 102–104 |
 | Json parse, navigation, object key order, kind errors | 105, 108 |
@@ -127,10 +145,10 @@ The CI matrix runs `test.lms` on Linux x64/arm64, macOS arm64/x64 and Windows x6
 ## Notes for the next port
 
 - The schema declares 45 host signatures (the shop domain plus the native conversion probes) and the full v3
-  standard catalog (182 signatures). The port registers exactly the declared host surface; `--dsl-signatures` must equal the
+  standard catalog (206 signatures). The port registers exactly the declared host surface; `--dsl-signatures` must equal the
   schema-derived list, and the protocol check enforces it.
 - Programs 201–205 exercise literal forms, 067 annotated interfaces, and 068–069 v6
-  rule entries. `sample-suite/check-recompile.lms` reproduces all 108 pinned cases;
+  rule entries. `sample-suite/check-recompile.lms` reproduces all 123 pinned cases;
   older compilers fail explicitly instead of reporting a partial pass.
 - Messages from `Ledger.reject` decode the byte string as UTF-8 (`VmException` takes a `String`). Corpus messages are
   ASCII; a port that must keep arbitrary bytes in error messages needs a byte-carrying error type.
@@ -156,7 +174,7 @@ undispatched `@never` entry. Tests compile it and compare the exact trace.
 The canonical program 069 demonstrates an interface returning a value.
 
 Every push to `main` builds with GraalVM Community 21 on Linux x64/arm64,
-macOS x64/arm64 and Windows x64. Each job tests the JVM host and all 108
+macOS x64/arm64 and Windows x64. Each job tests the JVM host and all 123
 cases against the native executable. All five must pass before an automatic
 `v0.4.<workflow run number>` release is published with checksums and notices.
 Pull requests run the same checks without publishing. Native executables
@@ -170,4 +188,4 @@ lmscript install github:lmctl-ai/lmcode-scala-sample@latest
 
 [examples/text-template.lms](examples/text-template.lms) renders ordinary text from a nested context with indexed lists, loops and boolean conditions. The standard `template_render(string, Json) -> string` function performs one pass; inserted values stay literal. Compile it with `lmscript --no-preflight examples/text-template.lms build/text-template.dslb`, then run the sample host with `--dsl build/text-template.dslb`.
 
-The lmscript-driven suite runs 108 cases, including template success/error cases. See the [portable template contract](https://github.com/lmctl-ai/lmcode-cpp/blob/main/std/template.md).
+The lmscript-driven suite runs 123 cases, including return-frame success/failure and template cases. See the [portable template contract](https://github.com/lmctl-ai/lmcode-cpp/blob/main/std/template.md).
