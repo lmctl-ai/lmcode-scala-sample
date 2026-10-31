@@ -12,4 +12,12 @@ with tempfile.TemporaryDirectory(prefix='jvm-multi-') as tmp:
  if p.stdout.count(b'"host_summary":')!=8: raise AssertionError(('summary loss',p.stdout))
  if b'LMCODE_RETURN_BEGIN' in p.stdout or b'LMCODE_RETURN_END' in p.stdout: raise AssertionError(('stale frame leaked to script output',p.stdout))
  if b'{"ok":true,"result":null}\n' in p.stdout: raise AssertionError(('stale bare frame',p.stdout))
+ direct=subprocess.run([host,'--lmcode',str(root/'sample-suite/bytecode/068-rule-entries.dslb')],capture_output=True)
+ if direct.returncode: raise AssertionError(('direct host baseline',direct.returncode,direct.stdout,direct.stderr))
+ lines=direct.stdout.splitlines()
+ begins=[i for i,line in enumerate(lines) if line==b'LMCODE_RETURN_BEGIN']
+ ends=[i for i,line in enumerate(lines) if line==b'LMCODE_RETURN_END']
+ if len(begins)!=1 or len(ends)!=1 or ends[0]!=begins[0]+2: raise AssertionError(('direct host frame shape',direct.stdout))
+ bare=b'{"ok":true,"result":null}'
+ if any(line==bare for i,line in enumerate(lines) if i<begins[0] or i>ends[0]): raise AssertionError(('stale bare frame',direct.stdout))
  print('PASS public multi-program flow, one host, one frame per run')
