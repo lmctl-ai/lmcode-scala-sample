@@ -1,6 +1,6 @@
 package shop
 
-import io.lmctl.lmcode.{Context, Formatting, Program, Registry, Value, VmException}
+import io.lmctl.lmcode.{Context, Formatting, Program, Registry, Reports, ResultSink, Value, VmException}
 import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.{Files, Path}
 
@@ -15,7 +15,7 @@ object Main:
     try "lmcode-scala-sample " + String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim
     finally in.close()
   }
-  private val Usage = "usage: --version | --dsl-schema [--json] | --dsl-signatures | --dsl FILE"
+  private val Usage = "usage: --version | --lmcode-schema [--json] | --lmcode-signatures | --lmcode FILE"
 
   def main(args: Array[String]): Unit =
     val status = run(args.toList)
@@ -28,13 +28,13 @@ object Main:
       case List("--version") =>
         Protocol.line(Version)
         0
-      case List("--dsl-schema") | List("--dsl-schema", "--json") =>
+      case List("--lmcode-schema") | List("--lmcode-schema", "--json") =>
         Protocol.emit(Shop.schemaBytes)
         0
-      case List("--dsl-signatures") =>
+      case List("--lmcode-signatures") =>
         Host().registry.signatures.forEach(signature => Protocol.line(signature))
         0
-      case List("--dsl", file) => runProgram(file)
+      case List("--lmcode", file) => runProgram(file)
       case _ =>
         Protocol.failure("cli", "CLI_USAGE", Usage.getBytes(UTF_8))
         2
@@ -49,8 +49,11 @@ object Main:
         case _: RuntimeException => return appFailure("cannot read sample input")
     runLoaded(program, host)
 
-  /** Run one loaded program. Its trace lines were already written by `print`; the result line comes last. */
+  /** Run one loaded program. Its trace lines were already written by `print`; the terminal frame follows the diagnostic result line. */
   private def runLoaded(program: Program, host: Host): Int =
+    // The invocation sink survives the body and selected rule-entry arena resets.
+    val sink = ResultSink()
+    host.registry.setResultSink(sink)
     val context = host.context
     try program.run(context, host.registry)
     catch
@@ -81,6 +84,8 @@ object Main:
     val note = Protocol.jsonString(host.ledger.note.bytes)
     val result = s"{\"balance\": ${host.ledger.balance}, \"entries\": ${host.ledger.entries}, \"note\": "
     Protocol.ok(concat(result.getBytes(UTF_8), note, s", \"entries_called\": $entriesCalled}".getBytes(UTF_8)))
+    try Reports.writeResultFrame(System.out, sink)
+    catch case _: java.io.IOException => return appFailure("cannot write result frame")
     0
 
   /** Call rule entry `index` with one argument; a non-void result prints `entry NAME = VALUE`. */

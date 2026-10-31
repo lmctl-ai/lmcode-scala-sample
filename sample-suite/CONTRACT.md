@@ -24,7 +24,12 @@ Schema bytes: `sample.dsl.json` (schema 2, merged default std); domain-only decl
   are never called. A non-void entry result is printed as `entry NAME = VALUE` in call order (VALUE uses
   the same text as `str()`). Entry-call failures are run-phase errors. The result object gains
   `"entries_called": N`, the number of entry calls the host made (0 for programs without rules).
-- Every execution prints trace lines via print, then one JSON result line and LF.
+- Every execution prints trace lines via print, then the existing JSON diagnostic line and LF.
+  On success only, append exactly `LMCODE_RETURN_BEGIN\n<compact JSON>\nLMCODE_RETURN_END\n`.
+  This terminal frame is mandatory (unset result is null), LF-only, and follows all entry traces
+  and application validation. One host-owned ResultSink spans the body and all selected entries;
+  never reset it between item/total calls or store it in a region arena. Entry/HALT values and
+  shop diagnostics stay independent of `$return`. Failed invocations emit no frame.
   Success result fields/order/spacing: `{"ok": true, "result": {"balance": 0, "entries": 0, "note": "", "entries_called": 0}}`.
   Negative final ledger balance is application failure (after VM success), exit 4:
   `{"ok": false, "phase": "app", "code": "APP_FAIL", "message": "ledger: negative balance"}`.
@@ -33,9 +38,9 @@ Schema bytes: `sample.dsl.json` (schema 2, merged default std); domain-only decl
   LOAD_SCHEMA_MISMATCH -> `sample schema mismatch`; LOAD_UNBOUND -> `sample import mismatch`.
   Host/VM run messages retain the SDK's message (including `dsl line N:C: `).
 - CLI: --version => `lmcode-cpp-sample 0.2.0` (other ports use their own binary name);
-  `--dsl-schema [--json]` => exact schema bytes; `--dsl-signatures` => sorted canonical signatures + LF;
-  `--dsl FILE` => run, exit 0/3/4; usage/unknown option => exit 2 and JSON phase cli,
-  code CLI_USAGE, message `usage: --version | --dsl-schema [--json] | --dsl-signatures | --dsl FILE`.
+  `--lmcode-schema [--json]` => exact schema bytes; `--lmcode-signatures` => sorted canonical signatures + LF;
+  `--lmcode FILE` => run, exit 0/3/4; usage/unknown option => exit 2 and JSON phase cli,
+  code CLI_USAGE, message `usage: --version | --lmcode-schema [--json] | --lmcode-signatures | --lmcode FILE`.
   Other command/IO setup errors become APP_FAIL, without machine-specific paths.
 
 ## Native conversion probes (shared by all ports)

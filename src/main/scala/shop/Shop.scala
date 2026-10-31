@@ -18,7 +18,7 @@ final class Ledger:
   var note: VmString = VmString.fromString("")
 
 object Shop:
-  /** The schema bytes: printed by `--dsl-schema` and required exactly when a program is loaded. */
+  /** The schema bytes: printed by `--lmcode-schema` and required exactly when a program is loaded. */
   lazy val schemaBytes: Array[Byte] =
     val stream = Shop.getClass.getResourceAsStream("/sample.dsl.json")
     if stream == null then throw IllegalStateException("sample.dsl.json is missing from the classpath")

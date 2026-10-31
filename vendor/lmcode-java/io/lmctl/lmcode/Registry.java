@@ -7,6 +7,9 @@ public final class Registry {
  Binding(String t,String n,List<String> p,String r,Callback cb){method=t!=null;type=t;name=n;parameters=List.copyOf(p);returns=r;callback=Objects.requireNonNull(cb);}
  public boolean method(){return method;} public String type(){return type;} public String name(){return name;} public List<String> parameters(){return parameters;} public String returns(){return returns;} public Callback callback(){return callback;}
  public String canonical(){return (method?"method "+type+".":"fn ")+name+"("+String.join(", ",parameters)+") -> "+returns;}}
+ private ResultSink resultSink;
+ public Registry setResultSink(ResultSink sink){resultSink=sink;return this;}
+ ResultSink resultSink(){if(resultSink==null)throw VmException.host("lmcode return: no result sink");return resultSink;}
  private final Map<String,Binding> bindings=new HashMap<>();private final Map<String,String> contexts=new HashMap<>();private final Set<String> builtins=new HashSet<>();private boolean registeringBuiltins,defaultCollections,active;
  public Registry(){this(true);} public Registry(boolean includeStd){if(includeStd)Stdlib.register(this);}
  private Registry add(String type,String name,List<String> params,String returns,Callback callback){Binding b=new Binding(type,name,params,returns,callback);String canonical=b.canonical();

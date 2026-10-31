@@ -7,7 +7,7 @@ public final class Stdlib {
   private Stdlib() {}
   public static void register(Registry r) {
     r.beginBuiltinRegistration();
-    try { StdString.register(r); StdMath.register(r); StdCollections.register(r, true); StdContainers.register(r); StdJson.register(r); StdFile.register(r); }
+    try { StdString.register(r); StdMath.register(r); StdCollections.register(r, true); StdContainers.register(r); StdJson.register(r); StdFile.register(r); StdReturn.register(r); }
     finally { r.endBuiltinRegistration(); }
   }
   public static void registerTesting(Registry r, OutputStream out) {
