@@ -7,26 +7,26 @@ final class StdString {
   static final int MAX=64*1024*1024;
   private static VmString s(Value v){return v.asString();}
   static void register(Registry r){
-    r.function("str_len", java.util.List.of("string"), "int", (c,self,a)->Value.ofInt(s(a[0]).length()));
-    r.function("str_starts_with",java.util.List.of("string","string"),"bool",(c,x,a)->Value.ofBool(bytes(s(a[0]),s(a[1]))));
-    r.function("str_ends_with",java.util.List.of("string","string"),"bool",(c,x,a)->Value.ofBool(ends(s(a[0]),s(a[1]))));
-    r.function("str_contains",java.util.List.of("string","string"),"bool",(c,x,a)->Value.ofBool(index(s(a[0]),s(a[1]))>=0));
-    r.function("str_find",java.util.List.of("string","string"),"int",(c,x,a)->Value.ofInt(index(s(a[0]),s(a[1]))));
-    r.function("str_lower",java.util.List.of("string"),"string",(c,x,a)->Value.ofString(lower(s(a[0]))));
-    r.function("str_upper",java.util.List.of("string"),"string",(c,x,a)->Value.ofString(upper(s(a[0]))));
-    r.function("str_trim",java.util.List.of("string"),"string",(c,x,a)->Value.ofString(trim(s(a[0]))));
-    r.function("str_substr",java.util.List.of("string","int","int"),"string",(c,x,a)->Value.ofString(substr(s(a[0]),a[1].asInt(),a[2].asInt())));
-    r.function("str_repeat",java.util.List.of("string","int"),"string",(c,x,a)->Value.ofString(repeat(c,s(a[0]),a[1].asInt())));
-    r.function("str_replace",java.util.List.of("string","string","string"),"string",(c,x,a)->Value.ofString(replace(c,s(a[0]),s(a[1]),s(a[2]))));
-    r.function("str_is_int",java.util.List.of("string"),"bool",(c,x,a)->Value.ofBool(parseInt(s(a[0]))!=null));
-    r.function("str_to_int",java.util.List.of("string"),"int",(c,x,a)->Value.ofInt(orZero(parseInt(s(a[0])))));
-    r.function("str_is_float",java.util.List.of("string"),"bool",(c,x,a)->Value.ofBool(parseFloat(s(a[0]))!=null));
-    r.function("str_to_float",java.util.List.of("string"),"float",(c,x,a)->Value.ofFloat(orZeroD(parseFloat(s(a[0])))));
-    r.function("str_match",java.util.List.of("string","string"),"bool",(c,x,a)->Value.ofBool(glob(b(s(a[0])),b(s(a[1])))));
-    r.function("str_base64_encode",java.util.List.of("string"),"string",(c,x,a)->Value.ofString(base64Encode(c,s(a[0]))));
-    r.function("str_base64_decode",java.util.List.of("string"),"string",(c,x,a)->Value.ofString(base64Decode(c,s(a[0]))));
-    r.function("str_hex_encode",java.util.List.of("string"),"string",(c,x,a)->Value.ofString(hexEncode(c,s(a[0]))));
-    r.function("str_hex_decode",java.util.List.of("string"),"string",(c,x,a)->Value.ofString(hexDecode(c,s(a[0]))));
+    Stdlib.safeFunction(r,"str_len", java.util.List.of("string"), "int", (c,self,a)->Value.ofInt(s(a[0]).length()));
+    Stdlib.safeFunction(r,"str_starts_with",java.util.List.of("string","string"),"bool",(c,x,a)->Value.ofBool(bytes(s(a[0]),s(a[1]))));
+    Stdlib.safeFunction(r,"str_ends_with",java.util.List.of("string","string"),"bool",(c,x,a)->Value.ofBool(ends(s(a[0]),s(a[1]))));
+    Stdlib.safeFunction(r,"str_contains",java.util.List.of("string","string"),"bool",(c,x,a)->Value.ofBool(index(s(a[0]),s(a[1]))>=0));
+    Stdlib.safeFunction(r,"str_find",java.util.List.of("string","string"),"int",(c,x,a)->Value.ofInt(index(s(a[0]),s(a[1]))));
+    Stdlib.safeFunction(r,"str_lower",java.util.List.of("string"),"string",(c,x,a)->Value.ofString(lower(s(a[0]))));
+    Stdlib.safeFunction(r,"str_upper",java.util.List.of("string"),"string",(c,x,a)->Value.ofString(upper(s(a[0]))));
+    Stdlib.safeFunction(r,"str_trim",java.util.List.of("string"),"string",(c,x,a)->Value.ofString(trim(s(a[0]))));
+    Stdlib.safeFunction(r,"str_substr",java.util.List.of("string","int","int"),"string",(c,x,a)->Value.ofString(substr(s(a[0]),a[1].asInt(),a[2].asInt())));
+    Stdlib.safeFunction(r,"str_repeat",java.util.List.of("string","int"),"string",(c,x,a)->Value.ofString(repeat(c,s(a[0]),a[1].asInt())));
+    Stdlib.safeFunction(r,"str_replace",java.util.List.of("string","string","string"),"string",(c,x,a)->Value.ofString(replace(c,s(a[0]),s(a[1]),s(a[2]))));
+    Stdlib.safeFunction(r,"str_is_int",java.util.List.of("string"),"bool",(c,x,a)->Value.ofBool(parseInt(s(a[0]))!=null));
+    Stdlib.safeFunction(r,"str_to_int",java.util.List.of("string"),"int",(c,x,a)->Value.ofInt(orZero(parseInt(s(a[0])))));
+    Stdlib.safeFunction(r,"str_is_float",java.util.List.of("string"),"bool",(c,x,a)->Value.ofBool(parseFloat(s(a[0]))!=null));
+    Stdlib.safeFunction(r,"str_to_float",java.util.List.of("string"),"float",(c,x,a)->Value.ofFloat(orZeroD(parseFloat(s(a[0])))));
+    Stdlib.safeFunction(r,"str_match",java.util.List.of("string","string"),"bool",(c,x,a)->Value.ofBool(glob(b(s(a[0])),b(s(a[1])))));
+    Stdlib.safeFunction(r,"str_base64_encode",java.util.List.of("string"),"string",(c,x,a)->Value.ofString(base64Encode(c,s(a[0]))));
+    Stdlib.safeFunction(r,"str_base64_decode",java.util.List.of("string"),"string",(c,x,a)->Value.ofString(base64Decode(c,s(a[0]))));
+    Stdlib.safeFunction(r,"str_hex_encode",java.util.List.of("string"),"string",(c,x,a)->Value.ofString(hexEncode(c,s(a[0]))));
+    Stdlib.safeFunction(r,"str_hex_decode",java.util.List.of("string"),"string",(c,x,a)->Value.ofString(hexDecode(c,s(a[0]))));
   }
   private static final byte[] B64="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".getBytes(StandardCharsets.US_ASCII);
   private static final byte[] HEX="0123456789abcdef".getBytes(StandardCharsets.US_ASCII);

@@ -36,8 +36,31 @@ public final class Execution {
             case LOAD_LOCAL -> { int s=r.u16(); Value v=locals[s]; if(v==null||v.kind==Value.Kind.NONE) throw error("local slot "+s+" read before assignment"); stack.add(v); }
             case STORE_LOCAL -> locals[r.u16()]=pop(stack);
             case LOAD_CTX -> { String n=p.contexts.get(r.u16()); Value v=ctx.get(n); if(v==null||v.kind==Value.Kind.NONE) throw error("context variable '"+n+"' was not provided by the host for this run"); stack.add(v); }
-            case CALL_FN -> { Registry.Binding b=p.imports.get(r.u16()); Value[] a=args(stack,r.u8()); Value v=b.callback.call(ctx,Value.none(),a); if(v!=null&&v.kind!=Value.Kind.NONE){if(v.kind==Value.Kind.STR)ctx.charge(v.asString().length());stack.add(v);} }
-            case CALL_METHOD -> { Registry.Binding b=p.imports.get(r.u16()); Value[] a=args(stack,r.u8()); Value self=pop(stack); if(self.kind!=Value.Kind.OBJ || !self.objectType().equals(b.type)) throw error("method "+b.type+"."+b.name+" called on a "+(self.kind==Value.Kind.OBJ?self.objectType():self.kindName())); Value v=b.callback.call(ctx,self,a); if(v!=null&&v.kind!=Value.Kind.NONE){if(v.kind==Value.Kind.STR)ctx.charge(v.asString().length());stack.add(v);} }
+            case CALL_FN -> {
+              Registry.Binding b=p.imports.get(r.u16());Value[] a=args(stack,r.u8());
+              if(containsDryNull(a))throw VmException.host("dry null cannot be passed to a host callback");
+              Value v;
+              if(ctx.dry()){
+                if(b.dryCallback==null)v=Stdlib.dryDummy(ctx,b.returns);
+                else v=b.dryCallback.callback.call(ctx,Value.none(),a);
+              }else v=b.callback.call(ctx,Value.none(),a);
+              if(ctx.dry())validateDryResult(v,b.returns);
+              if(v!=null&&v.kind!=Value.Kind.NONE){if(v.kind==Value.Kind.STR)ctx.charge(v.asString().length());stack.add(v);}
+            }
+            case CALL_METHOD -> {
+              Registry.Binding b=p.imports.get(r.u16());Value[] a=args(stack,r.u8());Value self=pop(stack);boolean dry=ctx.dry();
+              if(self.kind==Value.Kind.DRY_NULL&&(!dry||!self.isDryNull()))throw VmException.host("invalid dry null provenance in method receiver");
+              if(containsDryNull(a))throw VmException.host("dry null cannot be passed to a host callback");
+              Value v;
+              if(dry&&b.dryCallback==null)v=Stdlib.dryDummy(ctx,b.returns);
+              else{
+                if(self.isDryNull())throw VmException.host("method "+b.type+"."+b.name+" requires a concrete receiver after dry null");
+                if(self.kind!=Value.Kind.OBJ||!self.objectType().equals(b.type))throw error("method "+b.type+"."+b.name+" called on a "+(self.kind==Value.Kind.OBJ?self.objectType():self.kindName()));
+                v=(dry?b.dryCallback.callback:b.callback).call(ctx,self,a);
+              }
+              if(dry)validateDryResult(v,b.returns);
+              if(v!=null&&v.kind!=Value.Kind.NONE){if(v.kind==Value.Kind.STR)ctx.charge(v.asString().length());stack.add(v);}
+            }
             case EQ, NE -> { Value b=pop(stack), a=pop(stack); boolean eq=equal(a,b); stack.add(Value.ofBool(op==Op.EQ?eq:!eq)); }
             case NOT -> stack.add(Value.ofBool(!unary(stack,Value.Kind.BOOL,"! applied to a").asBool()));
             case JUMP -> jump(r,r.i32(),p.code.length);
@@ -77,7 +100,14 @@ public final class Execution {
   private static Value unary(List<Value>s,Value.Kind k,String m){Value v=pop(s);if(v.kind!=k)throw error(m+" "+v.kindName());return v;}
   private static boolean condition(List<Value>s){Value v=pop(s);if(v.kind!=Value.Kind.BOOL)throw error("condition is a "+v.kindName()+", not a bool");return v.asBool();}
   private static Value[] args(List<Value>s,int n){Value[]a=new Value[n];for(int i=n-1;i>=0;i--)a[i]=pop(s);return a;}
-  private static boolean equal(Value a,Value b){if(a.kind!=b.kind)throw error("cannot compare "+a.kindName()+" with "+b.kindName());return switch(a.kind){case NONE->true;case INT->a.asInt()==b.asInt();case FLOAT->a.asFloat()==b.asFloat();case STR->a.asString().equals(b.asString());case BOOL->a.asBool()==b.asBool();case OBJ->a.asObject()==b.asObject();};}
+  private static boolean equal(Value a,Value b){if(a.kind!=b.kind)throw error("cannot compare "+a.kindName()+" with "+b.kindName());return switch(a.kind){case NONE->true;case INT->a.asInt()==b.asInt();case FLOAT->a.asFloat()==b.asFloat();case STR->a.asString().equals(b.asString());case BOOL->a.asBool()==b.asBool();case OBJ->a.asObject()==b.asObject();case DRY_NULL->a.isDryNull()&&b.isDryNull()&&a.objectType().equals(b.objectType());};}
+  private static boolean containsDryNull(Value[] values){for(Value value:values)if(value.kind==Value.Kind.DRY_NULL)return true;return false;}
+  private static void validateDryResult(Value value,String declared){
+    if(value!=null&&value.isDryNull()&&value.objectType().equals(declared))return;
+    String expected=switch(declared){case "void"->"void";case "bool"->"bool";case "int","integer","int64"->"int";case "float","double","number"->"float";case "string"->"string";default->"object";};
+    boolean matches=value!=null&&switch(expected){case "void"->value.kind==Value.Kind.NONE;case "bool"->value.kind==Value.Kind.BOOL;case "int"->value.kind==Value.Kind.INT;case "float"->value.kind==Value.Kind.FLOAT;case "string"->value.kind==Value.Kind.STR;default->value.kind==Value.Kind.OBJ&&value.objectType().equals(declared)&&value.asObject()!=null;};
+    if(!matches)throw VmException.host("dry callback for "+declared+" returned "+(value==null?"handle":value.kindName()));
+  }
   private static long div(long a,long b){if(b==0)throw error("int division by zero");return a==Long.MIN_VALUE&&b==-1?Long.MIN_VALUE:a/b;}
   private static long mod(long a,long b){if(b==0)throw error("int modulo by zero");return a==Long.MIN_VALUE&&b==-1?0:a%b;}
   private interface IL{long f(long a,long b);} private interface FL{double f(double a,double b);} private interface BL{boolean f(long a,long b);} private interface BF{boolean f(double a,double b);}

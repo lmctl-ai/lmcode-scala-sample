@@ -81,6 +81,7 @@ public final class Program {
     if(entry<0||entry>=rules.size())throw VmException.host("call entry index "+entry+" out of range ("+rules.size()+" entries)");
     Rule rule=rules.get(entry);int expected=rule.entry().params().size();
     if(args.size()!=expected)throw VmException.host("call entry '"+rule.entry().name()+"' expects "+expected+" argument(s); found "+args.size());
+    for(Value argument:args)if(argument.kind==Value.Kind.DRY_NULL)throw VmException.host("invalid dry null provenance in entry arguments");
     return Execution.execute(rule.region(),context,registry,args,!rule.entry().returns().equals("void"));
   }
 

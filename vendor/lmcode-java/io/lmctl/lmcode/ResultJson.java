@@ -99,6 +99,7 @@ final class ResultJson {
     if(value==null)throw invalid(path,"handle");
     return switch(value.kind){
       case NONE -> null;
+      case DRY_NULL -> {if(value.isDryNull())yield null;throw invalid(path,"dry null");}
       case INT -> integer(value.asInt(),path);
       case FLOAT -> number(value.asFloat(),path);
       case BOOL -> value.asBool();

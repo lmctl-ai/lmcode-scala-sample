@@ -41,9 +41,9 @@ public record ResultContract(String type, boolean nullable) {
   if(map&&value instanceof Map<?,?> values){for(var e:values.entrySet())if(!primitive(e.getValue(),element))mismatch(ResultJson.pointer(path,(String)e.getKey()),element,InvocationJson.kind(e.getValue()));return;}
   mismatch(path,type,InvocationJson.kind(value));
  }
- static String sourceType(Value value){return switch(value.kind){case NONE->"null";case INT->"int";case FLOAT->"float";case BOOL->"bool";case STR->"string";case OBJ->value.objectType();};}
+ static String sourceType(Value value){return switch(value.kind){case NONE,DRY_NULL->"null";case INT->"int";case FLOAT->"float";case BOOL->"bool";case STR->"string";case OBJ->value.objectType();};}
  static boolean assignable(String actual,String expected){return actual.equals(expected)||actual.equals("int")&&expected.equals("float")||actual.equals("IntList")&&expected.equals("FloatList")||actual.equals("IntMap")&&expected.equals("FloatMap");}
- void validateSource(Value value){if(type.isEmpty()||type.equals("Json")||value.kind==Value.Kind.NONE||value.kind==Value.Kind.OBJ&&value.objectType().equals("Json"))return;String actual=sourceType(value);if(!assignable(actual,type))mismatch("",type,actual);}
+ void validateSource(Value value){if(type.isEmpty()||type.equals("Json")||value.kind==Value.Kind.NONE||value.kind==Value.Kind.DRY_NULL||value.kind==Value.Kind.OBJ&&value.objectType().equals("Json"))return;String actual=sourceType(value);if(!assignable(actual,type))mismatch("",type,actual);}
  void validateFieldSource(String key,Value value){
   if(type.isEmpty()||type.equals("Json")||value.kind==Value.Kind.OBJ&&value.objectType().equals("Json"))return;
   String expected=switch(type){case "IntMap"->"int";case "FloatMap"->"float";case "StrMap"->"string";default->"";};

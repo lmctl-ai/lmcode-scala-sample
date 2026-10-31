@@ -1,6 +1,7 @@
 package shop
 
 import io.lmctl.lmcode.{Context, Registry, Stdlib, Value, VmException, VmString}
+import java.nio.file.{Files, Path, StandardOpenOption}
 import scala.collection.mutable.ArrayBuffer
 
 /** Money is signed int64 cents. Equal contents are distinct objects, so handles point at instances. */
@@ -35,7 +36,15 @@ object Shop:
 /** The host owns every object bytecode can reach. `arena` keeps each Money alive for the process, so
   * handles stay valid until this Host is dropped.
   */
-final class Host:
+final class Host(val dryMode: Boolean = false):
+  private def writeSentinel(event: String): Unit =
+    val path = System.getenv("LMCODE_H6_SENTINEL")
+    if path != null && path.nonEmpty then
+      try Files.writeString(Path.of(path), event + "\n", java.nio.charset.StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND)
+      catch case error: java.io.IOException => throw VmException.host("host setup/ledger sentinel: " + error.getMessage)
+
+  if !dryMode then writeSentinel("setup")
+
   /** The default registry installs the standard string, math, collection and file functions. */
   val registry: Registry = Registry()
 
@@ -48,6 +57,7 @@ final class Host:
 
   val ledger: Ledger = Ledger()
   val shop: Shop = Shop(Items(Vector(own(125), own(250), own(375))))
+  var dryPreviewCalls: Int = 0
 
   /** Fresh per run: the context names the live instances that the schema's `context` lines declare. */
   def context: Context =
@@ -83,8 +93,10 @@ final class Host:
   Stdlib.registerTesting(registry, System.out)
 
   // Distinct parameter lists are overloads: `int` means cents, `float` means units.
-  registry.function("money", params("int"), "Money", (_, _, a) => money(a(0).asInt))
-  registry.function("money", params("float"), "Money", (_, _, a) => units(a(0).asFloat))
+  val moneyInt: Registry.Callback = (_, _, a) => money(a(0).asInt)
+  val moneyFloat: Registry.Callback = (_, _, a) => units(a(0).asFloat)
+  registry.function("money", params("int"), "Money", moneyInt, Registry.dry(moneyInt))
+  registry.function("money", params("float"), "Money", moneyFloat, Registry.dry(moneyFloat))
   registry.function("fee", params("int"), "int", (_, _, a) => Value.ofInt(a(0).asInt + 5))
   registry.function("sample_tmp", params(), "string", (_, _, _) => {
     val path = sys.env.getOrElse("SAMPLE_TMP", "")
@@ -127,12 +139,17 @@ final class Host:
 
   // A method can return its receiver (record), return a fresh object (balance) or return nothing (note).
   registry.method("Ledger", "record", params("Money"), "Ledger", (_, self, a) => {
+    writeSentinel("record")
     val ledger = as[Ledger](self)
     ledger.balance += Bind.moneyOf(a(0)).cents
     ledger.entries += 1L
     self
   })
-  registry.method("Ledger", "balance", params(), "Money", (_, self, _) => money(as[Ledger](self).balance))
+  val realBalance: Registry.Callback = (_, self, _) => money(as[Ledger](self).balance)
+  val dryBalance: Registry.Callback = (_, self, _) =>
+    dryPreviewCalls += 1
+    money(as[Ledger](self).balance)
+  registry.method("Ledger", "balance", params(), "Money", realBalance, Registry.dry(dryBalance))
   registry.method("Ledger", "count", params(), "int", (_, self, _) => Value.ofInt(as[Ledger](self).entries))
   registry.method("Ledger", "note", params("string"), "void", (_, self, a) => {
     as[Ledger](self).note = a(0).asString

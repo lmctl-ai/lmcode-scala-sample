@@ -29,7 +29,7 @@ object Main:
     args match
       case List("--version") => Protocol.line(Version); 0
       case List("--lmcode-schema") | List("--lmcode-schema", "--json") => Protocol.emit(Shop.schemaBytes); 0
-      case List("--lmcode-signatures") => Host().registry.signatures().forEach(Protocol.line); 0
+      case List("--lmcode-signatures") => Host(false).registry.signatures().forEach(Protocol.line); 0
       case _ => runPrograms(args)
 
   private def runPrograms(args: List[String]): Int =
@@ -38,12 +38,14 @@ object Main:
     if pairs.exists(p => !Set("--lmcode", "--first", "--last").contains(p.head)) then return usage()
     val files = pairs.map(_(1)).asJava
     val priorities = pairs.map(p => if p.head == "--first" then 0 else if p.head == "--last" then 2 else 1)
-    val host = Host()
     try
       val results = InvocationResults.fromCommand(files)
+      // Resolve the invocation mode before creating the host's runtime state.
+      val host = Host(results.dry())
       val schema = Shop.schemaBytes
       val contract = ResultContract.fromSchema(schema)
       val context = host.context
+      context.setDry(results.dry())
       var entriesCalled = 0
       var failed = false
       val order = pairs.indices.sortBy(priorities)
@@ -84,7 +86,8 @@ object Main:
         val summary = java.io.ByteArrayOutputStream()
         summary.writeBytes(s"{\"host_summary\":{\"balance\": ${host.ledger.balance}, \"entries\": ${host.ledger.entries}, \"note\": ".getBytes(UTF_8))
         summary.writeBytes(Protocol.jsonString(host.ledger.note.bytes))
-        summary.writeBytes(s", \"entries_called\": $entriesCalled}}\n".getBytes(UTF_8))
+        val preview = if results.dry() then s", \"dry_preview_calls\": ${host.dryPreviewCalls}" else ""
+        summary.writeBytes(s", \"entries_called\": $entriesCalled$preview}}\n".getBytes(UTF_8))
         Protocol.emit(summary.toByteArray)
       results.writeFrame(System.out)
     catch

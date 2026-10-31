@@ -429,7 +429,7 @@ final class StdJson {
   }
 
   static void register(Registry r) {
-    r.function("json_parse", List.of("string"), "Json", (c, self, a) -> {
+    Stdlib.safeFunction(r,"json_parse", List.of("string"), "Json", (c, self, a) -> {
       byte[] s = a[0].asString().bytes();
       c.charge(64L + s.length * 2L);
       utf8(s, 0);
@@ -442,7 +442,7 @@ final class StdJson {
       if (p.p != s.length) fail("trailing input", p.p);
       return StdCollections.obj(c, "Json", parsed);
     });
-    r.function("template_render", List.of("string","Json"), "string", (c,self,a) -> {
+    Stdlib.safeFunction(r,"template_render", List.of("string","Json"), "string", (c,self,a) -> {
       Node context=node(a[1]);
       if(context.kind!=Kind.OBJECT) throw VmException.host("template_render: context must be an object");
       String source=new String(a[0].asString().bytes(),StandardCharsets.ISO_8859_1);
@@ -450,21 +450,21 @@ final class StdJson {
       c.charge(result.getBytes(StandardCharsets.ISO_8859_1).length);
       return Value.ofString(new VmString(result.getBytes(StandardCharsets.ISO_8859_1)));
     });
-    r.method("Json", "kind", List.of(), "string", (c, self, a) -> Value.ofString(kindName(node(self))));
-    r.method("Json", "len", List.of(), "int", (c, self, a) -> {
+    Stdlib.safeMethod(r,"Json", "kind", List.of(), "string", (c, self, a) -> Value.ofString(kindName(node(self))));
+    Stdlib.safeMethod(r,"Json", "len", List.of(), "int", (c, self, a) -> {
       Node n = node(self);
       if (n.kind == Kind.ARRAY) return Value.ofInt(n.array.size());
       if (n.kind == Kind.OBJECT) return Value.ofInt(n.object.size());
       throw VmException.host("Json.len: expected array or object");
     });
-    r.method("Json", "at", List.of("int"), "Json", (c, self, a) -> {
+    Stdlib.safeMethod(r,"Json", "at", List.of("int"), "Json", (c, self, a) -> {
       Node n = node(self);
       if (n.kind != Kind.ARRAY) throw VmException.host("Json.at: expected array");
       long idx = a[0].asInt();
       if (idx < 0 || idx >= n.array.size()) throw VmException.host("Json.at: index out of range: " + idx);
       return StdCollections.borrow(self, "Json", n.array.get((int) idx));
     });
-    r.method("Json", "get", List.of("string"), "Json", (c, self, a) -> {
+    Stdlib.safeMethod(r,"Json", "get", List.of("string"), "Json", (c, self, a) -> {
       Node n = node(self);
       if (n.kind != Kind.OBJECT) throw VmException.host("Json.get: expected object");
       VmString key = a[0].asString();
@@ -473,7 +473,7 @@ final class StdJson {
       }
       throw VmException.host("Json.get: missing key");
     });
-    r.method("Json", "has", List.of("string"), "bool", (c, self, a) -> {
+    Stdlib.safeMethod(r,"Json", "has", List.of("string"), "bool", (c, self, a) -> {
       Node n = node(self);
       if (n.kind != Kind.OBJECT) throw VmException.host("Json.has: expected object");
       VmString key = a[0].asString();
@@ -482,35 +482,35 @@ final class StdJson {
       }
       return Value.ofBool(false);
     });
-    r.method("Json", "keys", List.of(), "StrList", (c, self, a) -> {
+    Stdlib.safeMethod(r,"Json", "keys", List.of(), "StrList", (c, self, a) -> {
       Node n = node(self);
       if (n.kind != Kind.OBJECT) throw VmException.host("Json.keys: expected object");
       ArrayList<VmString> keys = new ArrayList<>(n.object.size());
       for (Member m : n.object) keys.add(m.key);
       return StdCollections.obj(c, "StrList", keys);
     });
-    r.method("Json", "as_string", List.of(), "string", (c, self, a) -> {
+    Stdlib.safeMethod(r,"Json", "as_string", List.of(), "string", (c, self, a) -> {
       Node n = node(self);
       if (n.kind != Kind.STRING) throw VmException.host("Json.as_string: expected string");
       return Value.ofString(n.text);
     });
-    r.method("Json", "as_int", List.of(), "int", (c, self, a) -> {
+    Stdlib.safeMethod(r,"Json", "as_int", List.of(), "int", (c, self, a) -> {
       Node n = node(self);
       if (n.kind != Kind.INT) throw VmException.host("Json.as_int: expected int");
       return Value.ofInt(n.integerValue);
     });
-    r.method("Json", "as_float", List.of(), "float", (c, self, a) -> {
+    Stdlib.safeMethod(r,"Json", "as_float", List.of(), "float", (c, self, a) -> {
       Node n = node(self);
       if (n.kind == Kind.FLOAT) return Value.ofFloat(n.floatValue);
       if (n.kind == Kind.INT) return Value.ofFloat((double) n.integerValue);
       throw VmException.host("Json.as_float: expected number");
     });
-    r.method("Json", "as_bool", List.of(), "bool", (c, self, a) -> {
+    Stdlib.safeMethod(r,"Json", "as_bool", List.of(), "bool", (c, self, a) -> {
       Node n = node(self);
       if (n.kind != Kind.BOOL) throw VmException.host("Json.as_bool: expected bool");
       return Value.ofBool(n.booleanValue);
     });
-    r.method("Json", "to_json", List.of(), "string", (c, self, a) -> {
+    Stdlib.safeMethod(r,"Json", "to_json", List.of(), "string", (c, self, a) -> {
       Node n = node(self);
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       emit(n, out);

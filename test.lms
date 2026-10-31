@@ -10,6 +10,7 @@ python = "python3";
 if (env("RUNNER_OS") == "Windows") { python = "python"; }
 step([python, "-B", "scripts/sync.py", "check"]);
 step(["bash", "scripts/build-jvm.sh"]);
+step([python, "scripts/test-dry-invocations.py", path_join(Directory, "bin/lmcode-scala-sample")]);
 step([python, "scripts/test-invocation-mutations.py"]);
 jvm = ["java", "-cp", trim(read_file("target/runtime-classpath.txt")), "shop.Main"];
 step(concat(compiler_command(), ["--no-preflight", "sample-suite/audit.lms", "--std", "vendor/lmcode-java/std/lmcode-std.schema.json"]));

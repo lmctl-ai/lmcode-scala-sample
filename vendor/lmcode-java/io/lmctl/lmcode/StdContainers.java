@@ -77,17 +77,17 @@ final class StdContainers {
   interface S<T> { long bytes(T x); }
 
   static void register(Registry r) {
-    r.function("int_map", List.of(), "IntMap", (c, s, a) -> StdCollections.obj(c, "IntMap", new LinkedHashMap<VmString, Long>()));
-    r.function("float_map", List.of(), "FloatMap", (c, s, a) -> StdCollections.obj(c, "FloatMap", new LinkedHashMap<VmString, Double>()));
-    r.function("int_stack", List.of(), "IntStack", (c, s, a) -> StdCollections.obj(c, "IntStack", new ArrayList<Long>()));
-    r.function("float_stack", List.of(), "FloatStack", (c, s, a) -> StdCollections.obj(c, "FloatStack", new ArrayList<Double>()));
-    r.function("str_stack", List.of(), "StrStack", (c, s, a) -> StdCollections.obj(c, "StrStack", new ArrayList<VmString>()));
-    r.function("int_queue", List.of(), "IntQueue", (c, s, a) -> StdCollections.obj(c, "IntQueue", new QueueState<Long>()));
-    r.function("float_queue", List.of(), "FloatQueue", (c, s, a) -> StdCollections.obj(c, "FloatQueue", new QueueState<Double>()));
-    r.function("str_queue", List.of(), "StrQueue", (c, s, a) -> StdCollections.obj(c, "StrQueue", new QueueState<VmString>()));
-    r.function("int_pq", List.of(), "IntPQ", (c, s, a) -> StdCollections.obj(c, "IntPQ", new PqState<Long>()));
-    r.function("float_pq", List.of(), "FloatPQ", (c, s, a) -> StdCollections.obj(c, "FloatPQ", new PqState<Double>()));
-    r.function("str_pq", List.of(), "StrPQ", (c, s, a) -> StdCollections.obj(c, "StrPQ", new PqState<VmString>()));
+    Stdlib.safeFunction(r,"int_map", List.of(), "IntMap", (c, s, a) -> StdCollections.obj(c, "IntMap", new LinkedHashMap<VmString, Long>()));
+    Stdlib.safeFunction(r,"float_map", List.of(), "FloatMap", (c, s, a) -> StdCollections.obj(c, "FloatMap", new LinkedHashMap<VmString, Double>()));
+    Stdlib.safeFunction(r,"int_stack", List.of(), "IntStack", (c, s, a) -> StdCollections.obj(c, "IntStack", new ArrayList<Long>()));
+    Stdlib.safeFunction(r,"float_stack", List.of(), "FloatStack", (c, s, a) -> StdCollections.obj(c, "FloatStack", new ArrayList<Double>()));
+    Stdlib.safeFunction(r,"str_stack", List.of(), "StrStack", (c, s, a) -> StdCollections.obj(c, "StrStack", new ArrayList<VmString>()));
+    Stdlib.safeFunction(r,"int_queue", List.of(), "IntQueue", (c, s, a) -> StdCollections.obj(c, "IntQueue", new QueueState<Long>()));
+    Stdlib.safeFunction(r,"float_queue", List.of(), "FloatQueue", (c, s, a) -> StdCollections.obj(c, "FloatQueue", new QueueState<Double>()));
+    Stdlib.safeFunction(r,"str_queue", List.of(), "StrQueue", (c, s, a) -> StdCollections.obj(c, "StrQueue", new QueueState<VmString>()));
+    Stdlib.safeFunction(r,"int_pq", List.of(), "IntPQ", (c, s, a) -> StdCollections.obj(c, "IntPQ", new PqState<Long>()));
+    Stdlib.safeFunction(r,"float_pq", List.of(), "FloatPQ", (c, s, a) -> StdCollections.obj(c, "FloatPQ", new PqState<Double>()));
+    Stdlib.safeFunction(r,"str_pq", List.of(), "StrPQ", (c, s, a) -> StdCollections.obj(c, "StrPQ", new PqState<VmString>()));
 
     mapMethods(r, "IntMap", "int", Value::asInt, Value::ofInt, x -> 8L);
     mapMethods(r, "FloatMap", "float", Value::asFloat, Value::ofFloat, x -> 8L);
@@ -104,64 +104,64 @@ final class StdContainers {
 
   @SuppressWarnings("unchecked")
   private static <T> void mapMethods(Registry r, String type, String elem, G<T> get, P<T> put, S<T> size) {
-    r.method(type, "len", List.of(), "int", (c, self, a) -> Value.ofInt(((LinkedHashMap<VmString, T>) StdCollections.unwrap(self)).size()));
-    r.method(type, "has", List.of("string"), "bool", (c, self, a) -> Value.ofBool(((LinkedHashMap<VmString, T>) StdCollections.unwrap(self)).containsKey(a[0].asString())));
-    r.method(type, "get", List.of("string"), elem, (c, self, a) -> {
+    Stdlib.safeMethod(r,type, "len", List.of(), "int", (c, self, a) -> Value.ofInt(((LinkedHashMap<VmString, T>) StdCollections.unwrap(self)).size()));
+    Stdlib.safeMethod(r,type, "has", List.of("string"), "bool", (c, self, a) -> Value.ofBool(((LinkedHashMap<VmString, T>) StdCollections.unwrap(self)).containsKey(a[0].asString())));
+    Stdlib.safeMethod(r,type, "get", List.of("string"), elem, (c, self, a) -> {
       T v = ((LinkedHashMap<VmString, T>) StdCollections.unwrap(self)).get(a[0].asString());
       if (v == null) throw VmException.host(type + ".get: missing key");
       return put.put(v);
     });
-    r.method(type, "get_or", List.of("string", elem), elem, (c, self, a) -> {
+    Stdlib.safeMethod(r,type, "get_or", List.of("string", elem), elem, (c, self, a) -> {
       T v = ((LinkedHashMap<VmString, T>) StdCollections.unwrap(self)).get(a[0].asString());
       return v == null ? a[1] : put.put(v);
     });
-    r.method(type, "set", List.of("string", elem), type, (c, self, a) -> {
+    Stdlib.safeMethod(r,type, "set", List.of("string", elem), type, (c, self, a) -> {
       VmString k = a[0].asString();
       T v = get.get(a[1]);
       c.charge(64L + k.length() + size.bytes(v));
       ((LinkedHashMap<VmString, T>) StdCollections.unwrap(self)).put(k, v);
       return self;
     });
-    r.method(type, "key_at", List.of("int"), "string", (c, self, a) -> {
+    Stdlib.safeMethod(r,type, "key_at", List.of("int"), "string", (c, self, a) -> {
       var m = (LinkedHashMap<VmString, T>) StdCollections.unwrap(self);
       int idx = StdCollections.idx(a[0].asInt(), m.size(), type + ".key_at");
       return Value.ofString(new ArrayList<>(m.keySet()).get(idx));
     });
-    r.method(type, "remove", List.of("string"), "bool", (c, self, a) -> Value.ofBool(((LinkedHashMap<VmString, T>) StdCollections.unwrap(self)).remove(a[0].asString()) != null));
-    r.method(type, "clear", List.of(), type, (c, self, a) -> {
+    Stdlib.safeMethod(r,type, "remove", List.of("string"), "bool", (c, self, a) -> Value.ofBool(((LinkedHashMap<VmString, T>) StdCollections.unwrap(self)).remove(a[0].asString()) != null));
+    Stdlib.safeMethod(r,type, "clear", List.of(), type, (c, self, a) -> {
       ((LinkedHashMap<VmString, T>) StdCollections.unwrap(self)).clear();
       return self;
     });
     String listType = type.equals("IntMap") ? "IntList" : "FloatList";
-    r.method(type, "keys", List.of(), "StrList", (c, self, a) -> StdCollections.obj(c, "StrList", new ArrayList<>(((LinkedHashMap<VmString, T>) StdCollections.unwrap(self)).keySet())));
-    r.method(type, "values", List.of(), listType, (c, self, a) -> StdCollections.obj(c, listType, new ArrayList<>(((LinkedHashMap<VmString, T>) StdCollections.unwrap(self)).values())));
+    Stdlib.safeMethod(r,type, "keys", List.of(), "StrList", (c, self, a) -> StdCollections.obj(c, "StrList", new ArrayList<>(((LinkedHashMap<VmString, T>) StdCollections.unwrap(self)).keySet())));
+    Stdlib.safeMethod(r,type, "values", List.of(), listType, (c, self, a) -> StdCollections.obj(c, listType, new ArrayList<>(((LinkedHashMap<VmString, T>) StdCollections.unwrap(self)).values())));
   }
 
   @SuppressWarnings("unchecked")
   private static <T> void stackMethods(Registry r, String type, String elem, G<T> get, P<T> put, S<T> size) {
-    r.method(type, "push", List.of(elem), type, (c, self, a) -> {
+    Stdlib.safeMethod(r,type, "push", List.of(elem), type, (c, self, a) -> {
       T v = get.get(a[0]);
       c.charge(32L + size.bytes(v));
       ((ArrayList<T>) StdCollections.unwrap(self)).add(v);
       return self;
     });
-    r.method(type, "pop", List.of(), elem, (c, self, a) -> {
+    Stdlib.safeMethod(r,type, "pop", List.of(), elem, (c, self, a) -> {
       var s = (ArrayList<T>) StdCollections.unwrap(self);
       if (s.isEmpty()) throw VmException.host(type + ".pop: empty");
       return put.put(s.remove(s.size() - 1));
     });
-    r.method(type, "peek", List.of(), elem, (c, self, a) -> {
+    Stdlib.safeMethod(r,type, "peek", List.of(), elem, (c, self, a) -> {
       var s = (ArrayList<T>) StdCollections.unwrap(self);
       if (s.isEmpty()) throw VmException.host(type + ".peek: empty");
       return put.put(s.get(s.size() - 1));
     });
-    r.method(type, "len", List.of(), "int", (c, self, a) -> Value.ofInt(((ArrayList<T>) StdCollections.unwrap(self)).size()));
-    r.method(type, "empty", List.of(), "bool", (c, self, a) -> Value.ofBool(((ArrayList<T>) StdCollections.unwrap(self)).isEmpty()));
-    r.method(type, "clear", List.of(), type, (c, self, a) -> {
+    Stdlib.safeMethod(r,type, "len", List.of(), "int", (c, self, a) -> Value.ofInt(((ArrayList<T>) StdCollections.unwrap(self)).size()));
+    Stdlib.safeMethod(r,type, "empty", List.of(), "bool", (c, self, a) -> Value.ofBool(((ArrayList<T>) StdCollections.unwrap(self)).isEmpty()));
+    Stdlib.safeMethod(r,type, "clear", List.of(), type, (c, self, a) -> {
       ((ArrayList<T>) StdCollections.unwrap(self)).clear();
       return self;
     });
-    r.method(type, "at", List.of("int"), elem, (c, self, a) -> {
+    Stdlib.safeMethod(r,type, "at", List.of("int"), elem, (c, self, a) -> {
       var s = (ArrayList<T>) StdCollections.unwrap(self);
       int idx = StdCollections.idx(a[0].asInt(), s.size(), type + ".at");
       return put.put(s.get(s.size() - 1 - idx));
@@ -170,26 +170,26 @@ final class StdContainers {
 
   @SuppressWarnings("unchecked")
   private static <T> void queueMethods(Registry r, String type, String elem, G<T> get, P<T> put, S<T> size) {
-    r.method(type, "push", List.of(elem), type, (c, self, a) -> {
+    Stdlib.safeMethod(r,type, "push", List.of(elem), type, (c, self, a) -> {
       T v = get.get(a[0]);
       c.charge(32L + size.bytes(v));
       ((QueueState<T>) StdCollections.unwrap(self)).push(v);
       return self;
     });
-    r.method(type, "pop", List.of(), elem, (c, self, a) -> put.put(((QueueState<T>) StdCollections.unwrap(self)).pop(type)));
-    r.method(type, "peek", List.of(), elem, (c, self, a) -> put.put(((QueueState<T>) StdCollections.unwrap(self)).peek(type)));
-    r.method(type, "len", List.of(), "int", (c, self, a) -> Value.ofInt(((QueueState<T>) StdCollections.unwrap(self)).size()));
-    r.method(type, "empty", List.of(), "bool", (c, self, a) -> Value.ofBool(((QueueState<T>) StdCollections.unwrap(self)).empty()));
-    r.method(type, "clear", List.of(), type, (c, self, a) -> {
+    Stdlib.safeMethod(r,type, "pop", List.of(), elem, (c, self, a) -> put.put(((QueueState<T>) StdCollections.unwrap(self)).pop(type)));
+    Stdlib.safeMethod(r,type, "peek", List.of(), elem, (c, self, a) -> put.put(((QueueState<T>) StdCollections.unwrap(self)).peek(type)));
+    Stdlib.safeMethod(r,type, "len", List.of(), "int", (c, self, a) -> Value.ofInt(((QueueState<T>) StdCollections.unwrap(self)).size()));
+    Stdlib.safeMethod(r,type, "empty", List.of(), "bool", (c, self, a) -> Value.ofBool(((QueueState<T>) StdCollections.unwrap(self)).empty()));
+    Stdlib.safeMethod(r,type, "clear", List.of(), type, (c, self, a) -> {
       ((QueueState<T>) StdCollections.unwrap(self)).clear();
       return self;
     });
-    r.method(type, "at", List.of("int"), elem, (c, self, a) -> put.put(((QueueState<T>) StdCollections.unwrap(self)).at(a[0].asInt(), type)));
+    Stdlib.safeMethod(r,type, "at", List.of("int"), elem, (c, self, a) -> put.put(((QueueState<T>) StdCollections.unwrap(self)).at(a[0].asInt(), type)));
   }
 
   @SuppressWarnings("unchecked")
   private static <T> void pqMethods(Registry r, String type, String elem, G<T> get, P<T> put, S<T> size) {
-    r.method(type, "push", List.of(elem, "float"), type, (c, self, a) -> {
+    Stdlib.safeMethod(r,type, "push", List.of(elem, "float"), type, (c, self, a) -> {
       T v = get.get(a[0]);
       double prio = a[1].asFloat();
       var q = (PqState<T>) StdCollections.unwrap(self);
@@ -197,11 +197,11 @@ final class StdContainers {
       c.charge(48L + size.bytes(v));
       return self;
     });
-    r.method(type, "peek", List.of(), elem, (c, self, a) -> put.put(((PqState<T>) StdCollections.unwrap(self)).peek(type)));
-    r.method(type, "pop", List.of(), elem, (c, self, a) -> put.put(((PqState<T>) StdCollections.unwrap(self)).pop(type)));
-    r.method(type, "len", List.of(), "int", (c, self, a) -> Value.ofInt(((PqState<T>) StdCollections.unwrap(self)).items.size()));
-    r.method(type, "empty", List.of(), "bool", (c, self, a) -> Value.ofBool(((PqState<T>) StdCollections.unwrap(self)).items.isEmpty()));
-    r.method(type, "clear", List.of(), type, (c, self, a) -> {
+    Stdlib.safeMethod(r,type, "peek", List.of(), elem, (c, self, a) -> put.put(((PqState<T>) StdCollections.unwrap(self)).peek(type)));
+    Stdlib.safeMethod(r,type, "pop", List.of(), elem, (c, self, a) -> put.put(((PqState<T>) StdCollections.unwrap(self)).pop(type)));
+    Stdlib.safeMethod(r,type, "len", List.of(), "int", (c, self, a) -> Value.ofInt(((PqState<T>) StdCollections.unwrap(self)).items.size()));
+    Stdlib.safeMethod(r,type, "empty", List.of(), "bool", (c, self, a) -> Value.ofBool(((PqState<T>) StdCollections.unwrap(self)).items.isEmpty()));
+    Stdlib.safeMethod(r,type, "clear", List.of(), type, (c, self, a) -> {
       ((PqState<T>) StdCollections.unwrap(self)).clear();
       return self;
     });
