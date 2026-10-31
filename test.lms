@@ -10,25 +10,26 @@ python = "python3";
 if (env("RUNNER_OS") == "Windows") { python = "python"; }
 step([python, "-B", "scripts/sync.py", "check"]);
 step(["bash", "scripts/build-jvm.sh"]);
-step([python, "scripts/check-invocations.py", path_join(Directory, "bin/lmcode-scala-sample")]);
 step([python, "scripts/test-invocation-mutations.py"]);
 jvm = ["java", "-cp", trim(read_file("target/runtime-classpath.txt")), "shop.Main"];
 step(concat(compiler_command(), ["--no-preflight", "sample-suite/audit.lms", "--std", "vendor/lmcode-java/std/lmcode-std.schema.json"]));
 step(concat(compiler_command(), ["--no-preflight", "sample-suite/run-suite.lms"], jvm));
 step(concat(compiler_command(), ["--no-preflight", "sample-suite/check-recompile.lms"]));
 step(concat(compiler_command(), ["--no-preflight", "sample-suite/test-runner.lms"]));
-rule_example = invoke(suite_root(), concat(compiler_command(), ["--no-preflight", "examples/rule-entries.lms", path_join(Directory, "bin/lmcode-scala-sample")]), [], {}, 30000);
-assert(rule_example.code == 0 && rule_example.stdout == "body done\nitem rule 125\nitem rule 250\nitem rule 375\naudit 125\naudit 250\naudit 375\ntotal rule 750\n{\"host_summary\":{\"balance\": 0, \"entries\": 0, \"note\": \"\", \"entries_called\": 7}}\n" && rule_example.stderr_hex == "", "annotated interface example differs");
+example_host = path_join(Directory, "bin/lmcode-scala-sample");
 if (env("RUN_NATIVE") == "1") {
   step(["bash", "scripts/build-native.sh"]);
-  executable = path_join(Directory, "build/lmcode-scala-sample");
-  if (env("RUNNER_OS") == "Windows") { executable = executable + ".exe"; }
-  step(concat(compiler_command(), ["--no-preflight", "sample-suite/run-suite.lms", executable]));
+  example_host = path_join(Directory, "build/lmcode-scala-sample");
+  if (env("RUNNER_OS") == "Windows") { example_host = example_host + ".exe"; }
+  step(concat(compiler_command(), ["--no-preflight", "sample-suite/run-suite.lms", example_host]));
   println("PASS GraalVM native executable");
+} else {
+  assert(env("RUNNER_OS") != "Windows", "RUN_NATIVE=1 is required for Windows host discovery");
 }
+step([python, "scripts/check-invocations.py", example_host]);
+rule_example = invoke(suite_root(), concat(compiler_command(), ["--no-preflight", "examples/rule-entries.lms", example_host]), [], {}, 30000);
+assert(rule_example.code == 0 && rule_example.stdout == "body done\nitem rule 125\nitem rule 250\nitem rule 375\naudit 125\naudit 250\naudit 375\ntotal rule 750\n{\"host_summary\":{\"balance\": 0, \"entries\": 0, \"note\": \"\", \"entries_called\": 7}}\n" && rule_example.stderr_hex == "", "annotated interface example differs");
 println("PASS annotated interface example");
-
-# The reusable text-template program runs through the public API and the selected host.
-template_result = invoke(suite_root(), concat(compiler_command(), ["--no-preflight", "examples/text-template.lms", path_join(Directory, "bin/lmcode-scala-sample")]), [], {}, 30000);
+template_result = invoke(suite_root(), concat(compiler_command(), ["--no-preflight", "examples/text-template.lms", example_host]), [], {}, 30000);
 assert(template_result.code == 0 && template_result.stderr_hex == "" && template_result.stdout == "Hello, Sam!\nItems: 0: apple, 1: pear\n{\"host_summary\":{\"balance\": 0, \"entries\": 0, \"note\": \"\", \"entries_called\": 0}}\n", "text template example differs");
 println("PASS text template example");
