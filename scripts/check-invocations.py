@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Strict real compiler-to-host aggregate oracle, including the single-frame boundary."""
-import json, os, shlex, subprocess, sys, tempfile
+import json, os, subprocess, sys, tempfile
 from pathlib import Path
 root=Path(__file__).resolve().parent.parent
 host=str(Path(sys.argv[1]).resolve())
-source=(root/'sample-suite/invocations.lms').read_text().replace('"__HOST__"',json.dumps(shlex.quote(host)))
+source=(root/'sample-suite/invocations.lms').read_text().replace('"__HOST__"',json.dumps(host))
 with tempfile.TemporaryDirectory(prefix='jvm-multi-') as tmp:
  program=Path(tmp)/'invocations.lms'; program.write_text(source)
  p=subprocess.run([os.environ.get('LMSCRIPT_BIN','lmscript'),'--no-preflight',str(program),host],capture_output=True)
