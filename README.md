@@ -128,7 +128,7 @@ The CI matrix runs `test.lms` on Linux x64/arm64, macOS arm64/x64 and Windows x6
   standard catalog (182 signatures). The port registers exactly the declared host surface; `--lmcode-signatures` must equal the
   schema-derived list, and the protocol check enforces it.
 - Programs 201–205 exercise literal forms, 067 annotated interfaces, and 068–069 v6
-  rule entries. `sample-suite/check-recompile.lms` reproduces all 108 pinned cases;
+  rule entries. `sample-suite/check-recompile.lms` type-checks source files and verifies the pinned bytecode mutation controls;
   older compilers fail explicitly instead of reporting a partial pass.
 - Messages from `Ledger.reject` decode the byte string as UTF-8 (`VmException` takes a `String`). Corpus messages are
   ASCII; a port that must keep arbitrary bytes in error messages needs a byte-carrying error type.
