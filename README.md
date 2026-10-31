@@ -11,7 +11,7 @@ You need a JDK 21, [sbt](https://www.scala-sbt.org/), Python 3 and a v6-entries-
 LMSCRIPT_BIN=/path/to/v6-entries-capable/lmscript ./test.sh
 ```
 
-The corpus is DSLB v6. Install `@lmctl-ai/lmctl` from npm; version 0.2.444
+The corpus is lmcode bytecode (DSLB v6). Install `@lmctl-ai/lmctl` from npm; version 0.2.444
 or newer can reproduce these pinned sources. The SDK refuses v5 bytecode.
 
 ## Write a host in Scala in ten steps
@@ -171,3 +171,7 @@ lmscript install github:lmctl-ai/lmcode-scala-sample@latest
 [examples/text-template.lms](examples/text-template.lms) renders ordinary text from a nested context with indexed lists, loops and boolean conditions. The standard `template_render(string, Json) -> string` function performs one pass; inserted values stay literal. Compile it with `lmscript --no-preflight examples/text-template.lms build/text-template.dslb`, then run the sample host with `--dsl build/text-template.dslb`.
 
 The lmscript-driven suite runs 108 cases, including template success/error cases. See the [portable template contract](https://github.com/lmctl-ai/lmcode-cpp/blob/main/std/template.md).
+
+## Historical literal names
+
+The documentation calls the language lmcode. `--dsl`, `--dsl-schema` and `--dsl-signatures` are current host flag literals; `DSLB` is the bytecode magic and `DSLB v6` is the current format name; `.dslb` is the current bytecode filename extension. Other code-formatted API names, paths, manifest names and diagnostic text retain their current literal spellings.
