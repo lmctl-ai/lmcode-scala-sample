@@ -1,5 +1,7 @@
 # lmcode Scala shop sample
 
+Documentation: [Quick reference](https://www.lmctl.com/tools/lmcode-scala-sample/) | [LLM skill](https://www.lmctl.com/tools/lmcode-scala-sample/skill.html) | [Guide](https://www.lmctl.com/tools/lmcode-scala-sample/guide.html) | [Reference](https://www.lmctl.com/tools/lmcode-scala-sample/reference.html)
+
 **Agent entry point:** a complete Scala 3 host for the shared lmcode shop corpus, not another interpreter.
 Read these three files first: [domain and bindings](src/main/scala/shop/Shop.scala),
 [CLI protocol](src/main/scala/shop/Main.scala), and [byte-exact output](src/main/scala/shop/Protocol.scala).
